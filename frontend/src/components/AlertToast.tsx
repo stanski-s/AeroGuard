@@ -2,7 +2,8 @@
 
 import React from "react";
 import { CriticalAlert } from "@/types/alert";
-import { AlertTriangle, X, Thermometer, ShieldAlert } from "lucide-react";
+import { AlertTriangle, X, Thermometer } from "lucide-react";
+import { formatTemperature, formatTimestamp } from "@/utils/formatters";
 
 interface AlertToastProps {
   alert: CriticalAlert;
@@ -48,13 +49,13 @@ export const AlertToast: React.FC<AlertToastProps> = ({ alert, onDismiss }) => {
         <div className="flex items-center gap-1.5 font-mono">
           <Thermometer className="h-4 w-4 text-rose-400" />
           <span>
-            Temp: <strong className="text-rose-400 font-bold">{alert.temperature.toFixed(1)}°C</strong>
+            Temp: <strong className="text-rose-400 font-bold">{formatTemperature(alert.temperature)}</strong>
           </span>
           <span className="text-slate-500">/</span>
-          <span className="text-slate-400">Thresh: {alert.threshold.toFixed(1)}°C</span>
+          <span className="text-slate-400">Thresh: {formatTemperature(alert.threshold)}</span>
         </div>
         <time className="font-mono text-[11px] text-slate-400">
-          {new Date(alert.timestamp).toLocaleTimeString()}
+          {formatTimestamp(alert.timestamp)}
         </time>
       </div>
     </div>

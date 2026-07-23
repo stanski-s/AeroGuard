@@ -38,32 +38,49 @@ public class ThermalSpikeProcessFunction extends KeyedProcessFunction<String, Te
 
     @Override
     public void processElement(Telemetry value, Context ctx, Collector<Alert> out) throws Exception {
+        // Filter out non-generator or non-temperature telemetry if sensor ID is specified
+        if (value.getSensorId() != null && isNonGeneratorOrVibrationSensor(value.getSensorId())) {
+            return;
+        }
+
         RollingState state = rollingState.value();
         if (state == null) {
             state = new RollingState(windowSize);
         }
 
         state.addTemperature(value.getTemperature());
-        rollingState.update(state);
 
         double rollingAvg = state.getAverage();
         if (rollingAvg > defaultThreshold) {
-            long epochMs = value.getTimestamp() != null ? value.getTimestamp().toEpochMilli() : System.currentTimeMillis();
-            String alertId = generateAlertId(value.getAssetId(), epochMs, "THERMAL_SPIKE");
-            
-            Alert alert = new Alert(
-                    alertId,
-                    value.getAssetId(),
-                    value.getSensorId(),
-                    "THERMAL_SPIKE",
-                    rollingAvg,
-                    defaultThreshold,
-                    value.getTimestamp(),
-                    String.format("Thermal spike detected on asset %s: rolling avg %.2f°C breaches threshold %.2f°C",
-                            value.getAssetId(), rollingAvg, defaultThreshold)
-            );
-            out.collect(alert);
+            if (!state.isAlertActive()) {
+                long epochMs = value.getTimestamp() != null ? value.getTimestamp().toEpochMilli() : System.currentTimeMillis();
+                String alertId = generateAlertId(value.getAssetId(), epochMs, "THERMAL_SPIKE");
+                
+                Alert alert = new Alert(
+                        alertId,
+                        value.getAssetId(),
+                        value.getSensorId(),
+                        "THERMAL_SPIKE",
+                        rollingAvg,
+                        defaultThreshold,
+                        value.getTimestamp(),
+                        String.format("Thermal spike detected on asset %s: rolling avg %.2f°C breaches threshold %.2f°C",
+                                value.getAssetId(), rollingAvg, defaultThreshold)
+                );
+                out.collect(alert);
+                state.setAlertActive(true);
+            }
+        } else {
+            if (state.isAlertActive()) {
+                state.setAlertActive(false);
+            }
         }
+        rollingState.update(state);
+    }
+
+    private boolean isNonGeneratorOrVibrationSensor(String sensorId) {
+        String lower = sensorId.toLowerCase();
+        return lower.contains("vibration") || lower.contains("vibr");
     }
 
     public static String generateAlertId(String assetId, long timestampMs, String alertType) {
@@ -74,6 +91,7 @@ public class ThermalSpikeProcessFunction extends KeyedProcessFunction<String, Te
     public static class RollingState implements Serializable {
         private List<Double> recentTemperatures = new ArrayList<>();
         private int windowSize = 5;
+        private boolean alertActive = false;
 
         public RollingState() {}
 
@@ -95,6 +113,14 @@ public class ThermalSpikeProcessFunction extends KeyedProcessFunction<String, Te
                 sum += t;
             }
             return sum / recentTemperatures.size();
+        }
+
+        public boolean isAlertActive() {
+            return alertActive;
+        }
+
+        public void setAlertActive(boolean alertActive) {
+            this.alertActive = alertActive;
         }
 
         public int getWindowSize() {

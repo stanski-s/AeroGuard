@@ -45,12 +45,9 @@ public class TelemetryPipeline {
                 .setValueOnlyDeserializer(new SimpleStringSchema())
                 .build();
 
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.registerModule(new JavaTimeModule());
-
         DataStream<Telemetry> telemetryStream = env
                 .fromSource(source, WatermarkStrategy.noWatermarks(), "Kafka Source")
-                .map(json -> mapper.readValue(json, Telemetry.class))
+                .map(new TelemetryDeserializer())
                 .assignTimestampsAndWatermarks(
                         WatermarkStrategy.<Telemetry>forBoundedOutOfOrderness(Duration.ofSeconds(5))
                                 .withTimestampAssigner((event, timestamp) -> event.getTimestamp().toEpochMilli())
@@ -101,10 +98,34 @@ public class TelemetryPipeline {
                 .build();
 
         alertStream
-                .map(alert -> mapper.writeValueAsString(alert))
+                .map(new AlertSerializer())
                 .sinkTo(alertKafkaSink);
 
         env.execute("End-to-end Telemetry Ingestion");
+    }
+
+    public static class TelemetryDeserializer implements org.apache.flink.api.common.functions.MapFunction<String, Telemetry> {
+        private transient ObjectMapper mapper;
+
+        @Override
+        public Telemetry map(String json) throws Exception {
+            if (mapper == null) {
+                mapper = new ObjectMapper().registerModule(new JavaTimeModule());
+            }
+            return mapper.readValue(json, Telemetry.class);
+        }
+    }
+
+    public static class AlertSerializer implements org.apache.flink.api.common.functions.MapFunction<Alert, String> {
+        private transient ObjectMapper mapper;
+
+        @Override
+        public String map(Alert alert) throws Exception {
+            if (mapper == null) {
+                mapper = new ObjectMapper().registerModule(new JavaTimeModule());
+            }
+            return mapper.writeValueAsString(alert);
+        }
     }
 
     public static class TurbineMetric {

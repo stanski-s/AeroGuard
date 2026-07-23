@@ -4,25 +4,14 @@ import React from "react";
 import { useAlertWebSocket } from "@/hooks/useAlertWebSocket";
 import { AlertToastContainer } from "@/components/AlertToastContainer";
 import { Shield, Activity, Radio, AlertOctagon, Flame, CheckCircle, Trash2 } from "lucide-react";
-import { CriticalAlert } from "@/types/alert";
+import { formatTemperature, formatTimestamp } from "@/utils/formatters";
+import { generateMockThermalAlert } from "@/utils/mockAlertGenerator";
 
 export default function DashboardPage() {
   const { alerts, isConnected, dismissAlert, addAlert } = useAlertWebSocket();
 
   const handleSimulateAlert = () => {
-    const assetNum = Math.floor(Math.random() * 10) + 1;
-    const temp = (85 + Math.random() * 20).toFixed(1);
-    const mockAlert: CriticalAlert = {
-      alert_id: `sim-alert-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      asset_id: `turbine-${assetNum}`,
-      sensor_id: `temp-sensor-${assetNum}`,
-      alert_type: "THERMAL_SPIKE",
-      temperature: parseFloat(temp),
-      threshold: 80.0,
-      timestamp: new Date().toISOString(),
-      message: `Thermal spike detected on asset turbine-${assetNum}: temperature ${temp}°C breaches threshold 80.0°C`,
-    };
-    addAlert(mockAlert);
+    addAlert(generateMockThermalAlert());
   };
 
   return (
@@ -149,18 +138,18 @@ export default function DashboardPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-rose-400 font-bold">
-                        {alert.temperature.toFixed(1)}°C
+                        {formatTemperature(alert.temperature)}
                       </td>
                       <td className="px-6 py-4 text-slate-400">
-                        {alert.threshold.toFixed(1)}°C
+                        {formatTemperature(alert.threshold)}
                       </td>
                       <td className="px-6 py-4 text-slate-400">
-                        {new Date(alert.timestamp).toLocaleTimeString()}
+                        {formatTimestamp(alert.timestamp)}
                       </td>
                       <td className="px-6 py-4 text-right">
                         <button
                           onClick={() => dismissAlert(alert.alert_id)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                          className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
                           title="Dismiss"
                         >
                           <Trash2 className="h-4 w-4" />

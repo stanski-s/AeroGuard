@@ -49,8 +49,4 @@ public class AlertWebSocketHandler extends TextWebSocketHandler {
             }
         }
     }
-
-    public Set<WebSocketSession> getSessions() {
-        return sessions;
-    }
 }

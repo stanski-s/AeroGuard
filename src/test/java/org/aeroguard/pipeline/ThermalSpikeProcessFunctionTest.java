@@ -51,7 +51,8 @@ class ThermalSpikeProcessFunctionTest {
         testHarness.processElement(t2, now.plusSeconds(1).toEpochMilli());
 
         List<Alert> alerts = testHarness.extractOutputValues();
-        assertEquals(2, alerts.size());
+        // Expect 1 alert emitted when breach starts, not duplicate on every record during breach
+        assertEquals(1, alerts.size());
 
         Alert alert1 = alerts.get(0);
         assertEquals("turbine-2", alert1.getAssetId());
@@ -63,8 +64,15 @@ class ThermalSpikeProcessFunctionTest {
         // Check deterministic UUID format
         String expectedUUID = ThermalSpikeProcessFunction.generateAlertId("turbine-2", now.toEpochMilli(), "THERMAL_SPIKE");
         assertEquals(expectedUUID, alert1.getAlertId());
+    }
 
-        Alert alert2 = alerts.get(1);
-        assertEquals(90.0, alert2.getTemperature()); // rolling average of 85.0 and 95.0 is 90.0
+    @Test
+    void testVibrationSensorIgnoredForThermalSpike() throws Exception {
+        Instant now = Instant.now();
+        Telemetry t1 = new Telemetry("turbine-3", "vibration-sensor-1", now, 5.0, 95.0);
+        testHarness.processElement(t1, now.toEpochMilli());
+
+        List<Alert> alerts = testHarness.extractOutputValues();
+        assertTrue(alerts.isEmpty(), "Vibration sensors should not trigger thermal spike alerts");
     }
 }
