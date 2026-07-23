@@ -22,7 +22,7 @@ class TelemetryAggregatorTest {
         Telemetry tm2 = new Telemetry("asset1", "sensor1", t2, 3.5, 75.0);
         acc = aggregator.add(tm2, acc);
         
-        TelemetryPipeline.TurbineMetric result = aggregator.getResult(acc);
+        TelemetryPipeline.AssetMetric result = aggregator.getResult(acc);
         
         assertEquals("asset1", result.assetId);
         assertEquals(3.0, result.avgVibration, 0.01);

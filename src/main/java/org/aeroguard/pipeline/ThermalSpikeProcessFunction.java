@@ -2,23 +2,35 @@ package org.aeroguard.pipeline;
 
 import org.aeroguard.model.Alert;
 import org.aeroguard.model.Telemetry;
+import org.aeroguard.model.ThresholdConfig;
+import org.apache.flink.api.common.state.ListState;
+import org.apache.flink.api.common.state.ListStateDescriptor;
+import org.apache.flink.api.common.state.MapStateDescriptor;
+import org.apache.flink.api.common.state.ReadOnlyBroadcastState;
 import org.apache.flink.api.common.state.ValueState;
 import org.apache.flink.api.common.state.ValueStateDescriptor;
+import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
+import org.apache.flink.streaming.api.functions.co.KeyedBroadcastProcessFunction;
 import org.apache.flink.util.Collector;
 
-import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-public class ThermalSpikeProcessFunction extends KeyedProcessFunction<String, Telemetry, Alert> {
+public class ThermalSpikeProcessFunction extends KeyedBroadcastProcessFunction<String, Telemetry, ThresholdConfig, Alert> {
+
+    public static final String DEFAULT_ALERT_TYPE = "THERMAL_SPIKE";
+
+    public static final MapStateDescriptor<String, Double> THRESHOLD_STATE_DESCRIPTOR =
+            new MapStateDescriptor<>("thresholds-state", Types.STRING, Types.DOUBLE);
 
     private final double defaultThreshold;
     private final int windowSize;
-    private transient ValueState<RollingState> rollingState;
+
+    private transient ListState<Double> recentTemperaturesState;
+    private transient ValueState<Boolean> alertActiveState;
 
     public ThermalSpikeProcessFunction(double defaultThreshold) {
         this(defaultThreshold, 5);
@@ -31,51 +43,100 @@ public class ThermalSpikeProcessFunction extends KeyedProcessFunction<String, Te
 
     @Override
     public void open(Configuration parameters) throws Exception {
-        ValueStateDescriptor<RollingState> descriptor =
-                new ValueStateDescriptor<>("rolling-temperature-state", RollingState.class);
-        rollingState = getRuntimeContext().getState(descriptor);
+        ListStateDescriptor<Double> listDescriptor =
+                new ListStateDescriptor<>("recent-temperatures-state", Types.DOUBLE);
+        recentTemperaturesState = getRuntimeContext().getListState(listDescriptor);
+
+        ValueStateDescriptor<Boolean> alertActiveDescriptor =
+                new ValueStateDescriptor<>("alert-active-state", Types.BOOLEAN);
+        alertActiveState = getRuntimeContext().getState(alertActiveDescriptor);
     }
 
     @Override
-    public void processElement(Telemetry value, Context ctx, Collector<Alert> out) throws Exception {
-        // Filter out non-generator or non-temperature telemetry if sensor ID is specified
+    public void processElement(Telemetry value, ReadOnlyContext ctx, Collector<Alert> out) throws Exception {
         if (value.getSensorId() != null && isNonGeneratorOrVibrationSensor(value.getSensorId())) {
             return;
         }
 
-        RollingState state = rollingState.value();
-        if (state == null) {
-            state = new RollingState(windowSize);
+        List<Double> recentTemperatures = new ArrayList<>();
+        Iterable<Double> currentTemps = recentTemperaturesState.get();
+        if (currentTemps != null) {
+            for (Double temp : currentTemps) {
+                recentTemperatures.add(temp);
+            }
         }
 
-        state.addTemperature(value.getTemperature());
+        recentTemperatures.add(value.getTemperature());
+        while (recentTemperatures.size() > windowSize) {
+            recentTemperatures.remove(0);
+        }
+        recentTemperaturesState.update(recentTemperatures);
 
-        double rollingAvg = state.getAverage();
-        if (rollingAvg > defaultThreshold) {
-            if (!state.isAlertActive()) {
+        double sum = 0.0;
+        for (double t : recentTemperatures) {
+            sum += t;
+        }
+        double rollingAvg = recentTemperatures.isEmpty() ? 0.0 : sum / recentTemperatures.size();
+
+        double effectiveThreshold = defaultThreshold;
+        ReadOnlyBroadcastState<String, Double> broadcastState = ctx.getBroadcastState(THRESHOLD_STATE_DESCRIPTOR);
+        if (broadcastState != null) {
+            if (value.getAssetId() != null && broadcastState.contains(value.getAssetId())) {
+                effectiveThreshold = broadcastState.get(value.getAssetId());
+            } else if (broadcastState.contains("GLOBAL")) {
+                effectiveThreshold = broadcastState.get("GLOBAL");
+            }
+        }
+
+        boolean isAlertActive = Boolean.TRUE.equals(alertActiveState.value());
+
+        if (rollingAvg > effectiveThreshold) {
+            if (!isAlertActive) {
                 long epochMs = value.getTimestamp() != null ? value.getTimestamp().toEpochMilli() : System.currentTimeMillis();
-                String alertId = generateAlertId(value.getAssetId(), epochMs, "THERMAL_SPIKE");
-                
+                String alertId = generateAlertId(value.getAssetId(), epochMs, DEFAULT_ALERT_TYPE);
+
                 Alert alert = new Alert(
                         alertId,
                         value.getAssetId(),
                         value.getSensorId(),
-                        "THERMAL_SPIKE",
+                        DEFAULT_ALERT_TYPE,
                         rollingAvg,
-                        defaultThreshold,
+                        effectiveThreshold,
                         value.getTimestamp(),
                         String.format("Thermal spike detected on asset %s: rolling avg %.2f°C breaches threshold %.2f°C",
-                                value.getAssetId(), rollingAvg, defaultThreshold)
+                                value.getAssetId(), rollingAvg, effectiveThreshold)
                 );
                 out.collect(alert);
-                state.setAlertActive(true);
+                alertActiveState.update(true);
             }
         } else {
-            if (state.isAlertActive()) {
-                state.setAlertActive(false);
+            if (isAlertActive) {
+                alertActiveState.clear();
             }
         }
-        rollingState.update(state);
+    }
+
+    @Override
+    public void processBroadcastElement(ThresholdConfig config, Context ctx, Collector<Alert> out) throws Exception {
+        if (config == null) {
+            return;
+        }
+
+        // Filter out threshold configs for other alert types
+        if (config.getAlertType() != null && !config.getAlertType().trim().isEmpty()
+                && !DEFAULT_ALERT_TYPE.equalsIgnoreCase(config.getAlertType().trim())) {
+            return;
+        }
+
+        String key = getThresholdKey(config.getAssetId());
+        ctx.getBroadcastState(THRESHOLD_STATE_DESCRIPTOR).put(key, config.getThreshold());
+    }
+
+    public static String getThresholdKey(String assetId) {
+        if (assetId == null || assetId.trim().isEmpty() || assetId.equalsIgnoreCase("GLOBAL") || assetId.equalsIgnoreCase("DEFAULT")) {
+            return "GLOBAL";
+        }
+        return assetId;
     }
 
     private boolean isNonGeneratorOrVibrationSensor(String sensorId) {
@@ -86,57 +147,5 @@ public class ThermalSpikeProcessFunction extends KeyedProcessFunction<String, Te
     public static String generateAlertId(String assetId, long timestampMs, String alertType) {
         String rawKey = assetId + ":" + timestampMs + ":" + alertType;
         return UUID.nameUUIDFromBytes(rawKey.getBytes(StandardCharsets.UTF_8)).toString();
-    }
-
-    public static class RollingState implements Serializable {
-        private List<Double> recentTemperatures = new ArrayList<>();
-        private int windowSize = 5;
-        private boolean alertActive = false;
-
-        public RollingState() {}
-
-        public RollingState(int windowSize) {
-            this.windowSize = windowSize;
-        }
-
-        public void addTemperature(double temp) {
-            recentTemperatures.add(temp);
-            if (recentTemperatures.size() > windowSize) {
-                recentTemperatures.remove(0);
-            }
-        }
-
-        public double getAverage() {
-            if (recentTemperatures.isEmpty()) return 0.0;
-            double sum = 0;
-            for (double t : recentTemperatures) {
-                sum += t;
-            }
-            return sum / recentTemperatures.size();
-        }
-
-        public boolean isAlertActive() {
-            return alertActive;
-        }
-
-        public void setAlertActive(boolean alertActive) {
-            this.alertActive = alertActive;
-        }
-
-        public int getWindowSize() {
-            return windowSize;
-        }
-
-        public void setWindowSize(int windowSize) {
-            this.windowSize = windowSize;
-        }
-
-        public List<Double> getRecentTemperatures() {
-            return recentTemperatures;
-        }
-
-        public void setRecentTemperatures(List<Double> recentTemperatures) {
-            this.recentTemperatures = recentTemperatures;
-        }
     }
 }
