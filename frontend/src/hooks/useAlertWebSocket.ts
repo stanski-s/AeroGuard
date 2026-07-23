@@ -1,26 +1,17 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { CriticalAlert } from "@/types/alert";
+import { useTelemetryStore } from "@/store/useTelemetryStore";
 
 export function useAlertWebSocket(url: string = "ws://localhost:8080/ws/alerts") {
-  const [alerts, setAlerts] = useState<CriticalAlert[]>([]);
-  const [isConnected, setIsConnected] = useState<boolean>(false);
+  const alerts = useTelemetryStore((state) => state.alerts);
+  const isConnected = useTelemetryStore((state) => state.isConnected);
+  const addAlert = useTelemetryStore((state) => state.addAlert);
+  const dismissAlert = useTelemetryStore((state) => state.dismissAlert);
+  const setIsConnected = useTelemetryStore((state) => state.setIsConnected);
+
   const socketRef = useRef<WebSocket | null>(null);
-
-  const dismissAlert = useCallback((alertId: string) => {
-    setAlerts((prev) => prev.filter((a) => a.alert_id !== alertId));
-  }, []);
-
-  const addAlert = useCallback((alert: CriticalAlert) => {
-    setAlerts((prev) => {
-      // Idempotency check: don't duplicate alert with same alert_id
-      if (prev.some((a) => a.alert_id === alert.alert_id)) {
-        return prev;
-      }
-      return [alert, ...prev];
-    });
-  }, []);
 
   useEffect(() => {
     let ws: WebSocket | null = null;
@@ -33,7 +24,7 @@ export function useAlertWebSocket(url: string = "ws://localhost:8080/ws/alerts")
 
         ws.onopen = () => {
           setIsConnected(true);
-          console.log("[WebSocket] Connected to AeroGuard Gateway");
+          console.log("[WebSocket] Connected to AeroGuard Gateway:", url);
         };
 
         ws.onmessage = (event) => {
@@ -59,6 +50,7 @@ export function useAlertWebSocket(url: string = "ws://localhost:8080/ws/alerts")
         };
       } catch (e) {
         console.error("[WebSocket] Connection failed:", e);
+        setIsConnected(false);
         timeoutId = setTimeout(connect, 3000);
       }
     };
@@ -68,11 +60,11 @@ export function useAlertWebSocket(url: string = "ws://localhost:8080/ws/alerts")
     return () => {
       clearTimeout(timeoutId);
       if (ws) {
-        ws.onclose = null; // Prevent reconnect on unmount
+        ws.onclose = null;
         ws.close();
       }
     };
-  }, [url, addAlert]);
+  }, [url, addAlert, setIsConnected]);
 
   return { alerts, isConnected, dismissAlert, addAlert };
 }

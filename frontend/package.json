@@ -9,12 +9,17 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "echarts": "^6.1.0",
+    "echarts-for-react": "^3.0.6",
     "lucide-react": "^0.344.0",
+    "mapbox-gl": "^3.27.0",
     "next": "^14.1.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@types/mapbox-gl": "^3.4.1",
     "@types/node": "^20.11.20",
     "@types/react": "^18.2.58",
     "@types/react-dom": "^18.2.19",
