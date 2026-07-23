@@ -2,6 +2,8 @@ package org.aeroguard.pipeline;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.aeroguard.model.Alert;
+import org.aeroguard.model.AssetEvent;
+import org.aeroguard.model.AssetOperatingModeEvent;
 import org.aeroguard.model.Telemetry;
 import org.aeroguard.model.ThresholdConfig;
 import org.aeroguard.util.JsonMapperUtil;
@@ -34,6 +36,7 @@ public class TelemetryPipeline {
     
     private static final String TOPIC = "telemetry.raw";
     private static final String THRESHOLD_TOPIC = "config.thresholds";
+    private static final String STATUS_TOPIC = "events.status";
     private static final String KAFKA_BOOTSTRAP_SERVERS = System.getenv().getOrDefault("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092");
     private static final String DB_URL = System.getenv().getOrDefault("DB_URL", "jdbc:postgresql://localhost:5432/aeroguard");
     private static final String DB_USER = System.getenv().getOrDefault("DB_USER", "admin");
@@ -70,6 +73,23 @@ public class TelemetryPipeline {
                 .fromSource(thresholdSource, WatermarkStrategy.noWatermarks(), "Kafka Threshold Source")
                 .map(new ThresholdDeserializer());
 
+        KafkaSource<String> operatingModeSource = KafkaSource.<String>builder()
+                .setBootstrapServers(KAFKA_BOOTSTRAP_SERVERS)
+                .setTopics(STATUS_TOPIC)
+                .setGroupId("operating-mode-pipeline-group")
+                .setStartingOffsets(OffsetsInitializer.earliest())
+                .setValueOnlyDeserializer(new SimpleStringSchema())
+                .build();
+
+        DataStream<AssetOperatingModeEvent> operatingModeStream = env
+                .fromSource(operatingModeSource, WatermarkStrategy.noWatermarks(), "Kafka Operating Mode Source")
+                .map(new AssetOperatingModeDeserializer())
+                .assignTimestampsAndWatermarks(
+                        WatermarkStrategy.<AssetOperatingModeEvent>forBoundedOutOfOrderness(Duration.ofSeconds(5))
+                                .withTimestampAssigner((event, timestamp) ->
+                                        event.getTimestamp() != null ? event.getTimestamp().toEpochMilli() : System.currentTimeMillis())
+                );
+
         BroadcastStream<ThresholdConfig> broadcastThresholds = thresholdStream
                 .broadcast(ThermalSpikeProcessFunction.THRESHOLD_STATE_DESCRIPTOR);
 
@@ -103,8 +123,13 @@ public class TelemetryPipeline {
                         .build()
         ));
 
-        DataStream<Alert> alertStream = telemetryStream
-                .keyBy(Telemetry::getAssetId)
+        DataStream<AssetEvent> telemetryEvents = telemetryStream.map(AssetEvent::fromTelemetry);
+        DataStream<AssetEvent> modeEvents = operatingModeStream.map(AssetEvent::fromOperatingMode);
+
+        DataStream<AssetEvent> combinedAssetStream = telemetryEvents.union(modeEvents);
+
+        DataStream<Alert> alertStream = combinedAssetStream
+                .keyBy(AssetEvent::getAssetId)
                 .connect(broadcastThresholds)
                 .process(new ThermalSpikeProcessFunction(80.0));
 
@@ -150,6 +175,20 @@ public class TelemetryPipeline {
         @Override
         public ThresholdConfig map(String json) throws Exception {
             return mapper.readValue(json, ThresholdConfig.class);
+        }
+    }
+
+    public static class AssetOperatingModeDeserializer extends RichMapFunction<String, AssetOperatingModeEvent> {
+        private transient ObjectMapper mapper;
+
+        @Override
+        public void open(Configuration parameters) throws Exception {
+            mapper = JsonMapperUtil.getMapper();
+        }
+
+        @Override
+        public AssetOperatingModeEvent map(String json) throws Exception {
+            return mapper.readValue(json, AssetOperatingModeEvent.class);
         }
     }
 
