@@ -2,7 +2,10 @@ package org.aeroguard.pipeline;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import org.aeroguard.model.Alert;
 import org.aeroguard.model.Telemetry;
+import org.apache.flink.connector.kafka.sink.KafkaRecordSerializationSchema;
+import org.apache.flink.connector.kafka.sink.KafkaSink;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.functions.AggregateFunction;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
@@ -82,6 +85,24 @@ public class TelemetryPipeline {
                         .withPassword(DB_PASSWORD)
                         .build()
         ));
+
+        DataStream<Alert> alertStream = telemetryStream
+                .keyBy(Telemetry::getAssetId)
+                .process(new ThermalSpikeProcessFunction(80.0));
+
+        KafkaSink<String> alertKafkaSink = KafkaSink.<String>builder()
+                .setBootstrapServers(KAFKA_BOOTSTRAP_SERVERS)
+                .setRecordSerializer(
+                        KafkaRecordSerializationSchema.<String>builder()
+                                .setTopic("alerts.critical")
+                                .setValueSerializationSchema(new SimpleStringSchema())
+                                .build()
+                )
+                .build();
+
+        alertStream
+                .map(alert -> mapper.writeValueAsString(alert))
+                .sinkTo(alertKafkaSink);
 
         env.execute("End-to-end Telemetry Ingestion");
     }
