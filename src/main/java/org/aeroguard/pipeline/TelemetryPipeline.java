@@ -7,11 +7,13 @@ import org.aeroguard.model.AssetOperatingModeEvent;
 import org.aeroguard.model.Telemetry;
 import org.aeroguard.model.ThresholdConfig;
 import org.aeroguard.util.JsonMapperUtil;
+import org.aeroguard.model.TelemetryRecord;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.functions.AggregateFunction;
 import org.apache.flink.api.common.functions.RichMapFunction;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.connector.file.sink.FileSink;
 import org.apache.flink.connector.jdbc.JdbcConnectionOptions;
 import org.apache.flink.connector.jdbc.JdbcExecutionOptions;
 import org.apache.flink.connector.jdbc.JdbcSink;
@@ -19,9 +21,11 @@ import org.apache.flink.connector.kafka.sink.KafkaRecordSerializationSchema;
 import org.apache.flink.connector.kafka.sink.KafkaSink;
 import org.apache.flink.connector.kafka.source.KafkaSource;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
+import org.apache.flink.formats.parquet.avro.ParquetAvroWriters;
 import org.apache.flink.streaming.api.datastream.BroadcastStream;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.functions.sink.filesystem.bucketassigners.DateTimeBucketAssigner;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
 import org.slf4j.Logger;
@@ -36,14 +40,28 @@ public class TelemetryPipeline {
     
     private static final String TOPIC = "telemetry.raw";
     private static final String THRESHOLD_TOPIC = "config.thresholds";
-    private static final String STATUS_TOPIC = "events.status";
+    private static final String OPERATING_MODE_TOPIC = "events.status";
     private static final String KAFKA_BOOTSTRAP_SERVERS = System.getenv().getOrDefault("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092");
     private static final String DB_URL = System.getenv().getOrDefault("DB_URL", "jdbc:postgresql://localhost:5432/aeroguard");
     private static final String DB_USER = System.getenv().getOrDefault("DB_USER", "admin");
     private static final String DB_PASSWORD = System.getenv().getOrDefault("DB_PASSWORD", "password");
+    private static final String S3_ENDPOINT = System.getenv().getOrDefault("S3_ENDPOINT", "http://localhost:9000");
+    private static final String S3_ACCESS_KEY = System.getenv().getOrDefault("S3_ACCESS_KEY", "minioadmin");
+    private static final String S3_SECRET_KEY = System.getenv().getOrDefault("S3_SECRET_KEY", "minioadmin");
+    private static final String S3_BUCKET = System.getenv().getOrDefault("S3_BUCKET", "aeroguard-telemetry");
+    private static final String S3_PATH = System.getenv().getOrDefault("S3_PATH", "s3a://" + S3_BUCKET + "/raw");
 
     public static void main(String[] args) throws Exception {
-        final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        Configuration flinkConfig = new Configuration();
+        flinkConfig.setString("fs.s3a.endpoint", S3_ENDPOINT);
+        flinkConfig.setString("fs.s3a.access.key", S3_ACCESS_KEY);
+        flinkConfig.setString("fs.s3a.secret.key", S3_SECRET_KEY);
+        flinkConfig.setString("fs.s3a.path.style.access", "true");
+        flinkConfig.setString("fs.s3a.ssl.enabled", "false");
+        flinkConfig.setString("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
+
+        final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment(flinkConfig);
+        env.enableCheckpointing(5000);
 
         KafkaSource<String> source = KafkaSource.<String>builder()
                 .setBootstrapServers(KAFKA_BOOTSTRAP_SERVERS)
@@ -61,6 +79,15 @@ public class TelemetryPipeline {
                                 .withTimestampAssigner((event, timestamp) -> event.getTimestamp().toEpochMilli())
                 );
 
+        FileSink<TelemetryRecord> parquetSink = FileSink
+                .forBulkFormat(new org.apache.flink.core.fs.Path(S3_PATH), ParquetAvroWriters.forReflectRecord(TelemetryRecord.class))
+                .withBucketAssigner(new DateTimeBucketAssigner<>("yyyy-MM-dd-HH"))
+                .build();
+
+        telemetryStream
+                .map(TelemetryRecord::fromTelemetry)
+                .sinkTo(parquetSink);
+
         KafkaSource<String> thresholdSource = KafkaSource.<String>builder()
                 .setBootstrapServers(KAFKA_BOOTSTRAP_SERVERS)
                 .setTopics(THRESHOLD_TOPIC)
@@ -75,7 +102,7 @@ public class TelemetryPipeline {
 
         KafkaSource<String> operatingModeSource = KafkaSource.<String>builder()
                 .setBootstrapServers(KAFKA_BOOTSTRAP_SERVERS)
-                .setTopics(STATUS_TOPIC)
+                .setTopics(OPERATING_MODE_TOPIC)
                 .setGroupId("operating-mode-pipeline-group")
                 .setStartingOffsets(OffsetsInitializer.earliest())
                 .setValueOnlyDeserializer(new SimpleStringSchema())
