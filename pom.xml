@@ -228,9 +228,22 @@
                         </goals>
                         <configuration>
                             <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>org.aeroguard.pipeline.TelemetryPipeline</mainClass>
+                                </transformer>
+                            </transformers>
                         </configuration>
                     </execution>
                 </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.6.3</version>
+                <configuration>
+                    <mainClass>org.aeroguard.pipeline.TelemetryPipeline</mainClass>
+                </configuration>
             </plugin>
         </plugins>
     </build>
