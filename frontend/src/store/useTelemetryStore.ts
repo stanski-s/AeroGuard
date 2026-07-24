@@ -20,12 +20,14 @@ interface TelemetryState {
   updateAssetOperatingMode: (assetId: string, mode: OperatingMode) => void;
   addTelemetryPoint: (point: TelemetryPoint) => void;
   addTelemetryBatch: (points: TelemetryPoint[]) => void;
+  triggerThermalSpike: (assetId?: string, temperature?: number) => Promise<void>;
   toggleSimulation: () => void;
   tickSimulatedTelemetryStep: () => void;
 }
 
 const MAX_POINTS_PER_ASSET = 60;
 const baseTemps: Record<string, number> = {};
+const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:8080";
 
 export const useTelemetryStore = create<TelemetryState>((set, get) => ({
   alerts: [],
@@ -43,7 +45,26 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
       if (state.alerts.some((a) => a.alert_id === alert.alert_id)) {
         return state;
       }
-      return { alerts: [alert, ...state.alerts] };
+
+      // Automatically sync telemetry history with alert's spike point to prevent graph/alert mismatch
+      const spikePoint: TelemetryPoint = {
+        asset_id: alert.asset_id,
+        sensor_id: alert.sensor_id || `temp-${alert.asset_id}`,
+        temperature: alert.temperature,
+        vibration: 0.28,
+        timestamp: alert.timestamp || new Date().toISOString(),
+      };
+
+      const existingHistory = state.telemetryHistory[alert.asset_id] || [];
+      const updatedHistory = [...existingHistory, spikePoint].slice(-MAX_POINTS_PER_ASSET);
+
+      return {
+        alerts: [alert, ...state.alerts],
+        telemetryHistory: {
+          ...state.telemetryHistory,
+          [alert.asset_id]: updatedHistory,
+        },
+      };
     }),
 
   dismissAlert: (alertId) =>
@@ -55,12 +76,55 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
 
   setSelectedAssetId: (assetId) => set({ selectedAssetId: assetId }),
 
-  updateAssetOperatingMode: (assetId, mode) =>
+  updateAssetOperatingMode: (assetId, mode) => {
+    // 1. Update local state
     set((state) => ({
       assets: state.assets.map((asset) =>
         asset.id === assetId ? { ...asset, operatingMode: mode } : asset
       ),
-    })),
+    }));
+
+    // 2. Publish event to Kafka events.status via Gateway REST API
+    fetch(`${GATEWAY_URL}/api/assets/${assetId}/operating-mode?mode=${mode}`, {
+      method: "POST",
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        console.log(`[Operating Mode Kafka Event] Successfully updated ${assetId} to ${mode}`, data);
+      })
+      .catch((err) => {
+        console.warn(`[Operating Mode Kafka Event] Gateway request failed (using local state fallback):`, err);
+      });
+  },
+
+  triggerThermalSpike: async (assetId, temperature = 88.5) => {
+    const targetAssetId = assetId || get().selectedAssetId || "turbine-1";
+    console.log(`[Thermal Spike Trigger] Triggering ${temperature}°C spike for ${targetAssetId}`);
+
+    try {
+      const res = await fetch(
+        `${GATEWAY_URL}/api/simulator/spike?assetId=${encodeURIComponent(targetAssetId)}&temperature=${temperature}`,
+        { method: "POST" }
+      );
+      const data = await res.json();
+      console.log(`[Thermal Spike Trigger] Response:`, data);
+    } catch (err) {
+      console.warn(`[Thermal Spike Trigger] Gateway request failed. Wstrzykiwanie lokalne:`, err);
+      // Local fallback for offline mode
+      const nowStr = new Date().toISOString();
+      const mockAlert: CriticalAlert = {
+        alert_id: `alert-${Date.now()}-${targetAssetId}`,
+        asset_id: targetAssetId,
+        sensor_id: `temp-${targetAssetId}`,
+        alert_type: "THERMAL_SPIKE",
+        temperature: temperature,
+        threshold: 80.0,
+        timestamp: nowStr,
+        message: `Thermal spike detected on ${targetAssetId}: ${temperature}°C breaches threshold 80.0°C`,
+      };
+      get().addAlert(mockAlert);
+    }
+  },
 
   addTelemetryPoint: (point) =>
     set((state) => {

@@ -1,13 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef } from "react";
 import { CriticalAlert } from "@/types/alert";
+import { TelemetryPoint } from "@/types/telemetry";
 import { useTelemetryStore } from "@/store/useTelemetryStore";
 
-export function useAlertWebSocket(url: string = "ws://localhost:8080/ws/alerts") {
+const DEFAULT_WS_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8080/ws/stream";
+
+export function useTelemetryStream(url: string = DEFAULT_WS_URL) {
   const alerts = useTelemetryStore((state) => state.alerts);
   const isConnected = useTelemetryStore((state) => state.isConnected);
   const addAlert = useTelemetryStore((state) => state.addAlert);
+  const addTelemetryPoint = useTelemetryStore((state) => state.addTelemetryPoint);
+  const updateAssetOperatingMode = useTelemetryStore((state) => state.updateAssetOperatingMode);
   const dismissAlert = useTelemetryStore((state) => state.dismissAlert);
   const setIsConnected = useTelemetryStore((state) => state.setIsConnected);
 
@@ -24,32 +29,56 @@ export function useAlertWebSocket(url: string = "ws://localhost:8080/ws/alerts")
 
         ws.onopen = () => {
           setIsConnected(true);
-          console.log("[WebSocket] Connected to AeroGuard Gateway:", url);
+          console.log("[WebSocket Stream] Connected to AeroGuard Gateway:", url);
         };
 
         ws.onmessage = (event) => {
           try {
-            const data: CriticalAlert = JSON.parse(event.data);
-            if (data && data.alert_id) {
-              addAlert(data);
+            const rawData = JSON.parse(event.data);
+            
+            // Check if frame is typed frame from /ws/stream
+            if (rawData && typeof rawData === "object" && rawData.type) {
+              const { type, payload } = rawData;
+              if (type === "ALERT" && payload) {
+                const alertData: CriticalAlert = payload;
+                if (alertData.alert_id || alertData.asset_id) {
+                  addAlert(alertData);
+                }
+              } else if (type === "TELEMETRY" && payload) {
+                const point: TelemetryPoint = {
+                  asset_id: payload.assetId || payload.asset_id,
+                  sensor_id: payload.sensorId || payload.sensor_id || `temp-${payload.assetId}`,
+                  temperature: payload.temperature,
+                  vibration: payload.vibration,
+                  timestamp: payload.timestamp || new Date().toISOString(),
+                };
+                addTelemetryPoint(point);
+              } else if (type === "OPERATING_MODE" && payload) {
+                if (payload.assetId && payload.operatingMode) {
+                  updateAssetOperatingMode(payload.assetId, payload.operatingMode);
+                }
+              }
+            } else if (rawData && (rawData.alert_id || rawData.alertType || rawData.alert_type)) {
+              // Backward compatibility for raw alert frames
+              addAlert(rawData);
             }
           } catch (e) {
-            console.error("[WebSocket] Failed to parse alert JSON:", e);
+            console.error("[WebSocket Stream] Failed to parse JSON frame:", e);
           }
         };
 
         ws.onclose = () => {
           setIsConnected(false);
-          console.warn("[WebSocket] Connection closed. Reconnecting in 3s...");
+          console.warn("[WebSocket Stream] Connection closed. Reconnecting in 3s...");
           timeoutId = setTimeout(connect, 3000);
         };
 
         ws.onerror = (error) => {
-          console.error("[WebSocket] Error:", error);
+          console.error("[WebSocket Stream] Error:", error);
           ws?.close();
         };
       } catch (e) {
-        console.error("[WebSocket] Connection failed:", e);
+        console.error("[WebSocket Stream] Connection failed:", e);
         setIsConnected(false);
         timeoutId = setTimeout(connect, 3000);
       }
@@ -64,7 +93,10 @@ export function useAlertWebSocket(url: string = "ws://localhost:8080/ws/alerts")
         ws.close();
       }
     };
-  }, [url, addAlert, setIsConnected]);
+  }, [url, addAlert, addTelemetryPoint, updateAssetOperatingMode, setIsConnected]);
 
   return { alerts, isConnected, dismissAlert, addAlert };
 }
+
+// Retain alias for backward compatibility
+export const useAlertWebSocket = useTelemetryStream;

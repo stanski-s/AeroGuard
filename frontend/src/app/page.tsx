@@ -2,7 +2,7 @@
 
 import React, { useEffect } from "react";
 import dynamic from "next/dynamic";
-import { useAlertWebSocket } from "@/hooks/useAlertWebSocket";
+import { useTelemetryStream } from "@/hooks/useAlertWebSocket";
 import { useTelemetryStore } from "@/store/useTelemetryStore";
 import { AlertToastContainer } from "@/components/AlertToastContainer";
 import { TelemetryChart } from "@/components/TelemetryChart";
@@ -10,15 +10,12 @@ import { KPICards } from "@/components/KPICards";
 import { AssetControlPanel } from "@/components/AssetControlPanel";
 import { AlertsTable } from "@/components/AlertsTable";
 import { startTelemetrySimulation, stopTelemetrySimulation } from "@/utils/telemetrySimulator";
-import { generateMockThermalAlert } from "@/utils/mockAlertGenerator";
 import {
   Shield,
   Radio,
   Flame,
   Play,
   Pause,
-  RefreshCw,
-  Zap,
 } from "lucide-react";
 
 // Dynamic import for Mapbox component to prevent SSR window issues
@@ -35,9 +32,11 @@ const AssetMap = dynamic(
 );
 
 export default function DashboardPage() {
-  const { alerts, isConnected, dismissAlert, addAlert } = useAlertWebSocket();
+  const { alerts, isConnected, dismissAlert } = useTelemetryStream();
   const isSimulating = useTelemetryStore((state) => state.isSimulating);
   const toggleSimulation = useTelemetryStore((state) => state.toggleSimulation);
+  const selectedAssetId = useTelemetryStore((state) => state.selectedAssetId);
+  const triggerThermalSpike = useTelemetryStore((state) => state.triggerThermalSpike);
 
   useEffect(() => {
     startTelemetrySimulation();
@@ -47,7 +46,7 @@ export default function DashboardPage() {
   }, []);
 
   const handleSimulateAlert = () => {
-    addAlert(generateMockThermalAlert());
+    triggerThermalSpike(selectedAssetId || "turbine-1", 88.5);
   };
 
   return (
@@ -75,7 +74,7 @@ export default function DashboardPage() {
                   Command Center UI
                 </span>
                 <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/40 font-mono">
-                  Premium Dark Mode
+                  Kafka &amp; Flink Streaming
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-1">
@@ -95,7 +94,7 @@ export default function DashboardPage() {
               }`}
             >
               <Radio className={`h-4 w-4 ${isConnected ? "animate-pulse" : ""}`} />
-              <span>{isConnected ? "WS CONNECTED (ws://localhost:8080/ws/alerts)" : "WS RECONNECTING..."}</span>
+              <span>{isConnected ? "WS STREAM (ws://localhost:8080/ws/stream)" : "WS RECONNECTING..."}</span>
             </div>
 
             {/* Simulation Toggle */}
@@ -117,7 +116,7 @@ export default function DashboardPage() {
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white font-medium text-xs shadow-lg shadow-rose-600/30 transition-all hover:scale-[1.02] active:scale-[0.98]"
             >
               <Flame className="h-4 w-4" />
-              Trigger Thermal Spike
+              Trigger Kafka Thermal Spike
             </button>
           </div>
         </header>

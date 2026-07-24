@@ -1,5 +1,7 @@
 package org.aeroguard.gateway;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.aeroguard.gateway.kafka.AlertKafkaConsumer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,6 +31,8 @@ class WebSocketGatewayTest {
     @Autowired
     private AlertKafkaConsumer alertKafkaConsumer;
 
+    private final ObjectMapper mapper = new ObjectMapper();
+
     @Test
     void testWebSocketBroadcastsAlertToConnectedClient() throws Exception {
         BlockingQueue<String> receivedMessages = new ArrayBlockingQueue<>(10);
@@ -39,7 +43,7 @@ class WebSocketGatewayTest {
             protected void handleTextMessage(WebSocketSession session, TextMessage message) {
                 receivedMessages.add(message.getPayload());
             }
-        }, "ws://localhost:" + port + "/ws/alerts").get(5, TimeUnit.SECONDS);
+        }, "ws://localhost:" + port + "/ws/stream").get(5, TimeUnit.SECONDS);
 
         assertNotNull(session);
         assertTrue(session.isOpen());
@@ -61,7 +65,11 @@ class WebSocketGatewayTest {
 
         String received = receivedMessages.poll(5, TimeUnit.SECONDS);
         assertNotNull(received, "WebSocket client should receive broadcasted alert");
-        assertEquals(sampleAlertJson, received);
+
+        JsonNode root = mapper.readTree(received);
+        assertEquals("ALERT", root.get("type").asText());
+        assertEquals("12345-67890", root.get("payload").get("alert_id").asText());
+        assertEquals("turbine-99", root.get("payload").get("asset_id").asText());
 
         session.close();
     }

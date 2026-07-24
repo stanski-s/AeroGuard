@@ -49,9 +49,10 @@ public class TelemetryPipeline {
     private static final String S3_ACCESS_KEY = System.getenv().getOrDefault("S3_ACCESS_KEY", "minioadmin");
     private static final String S3_SECRET_KEY = System.getenv().getOrDefault("S3_SECRET_KEY", "minioadmin");
     private static final String S3_BUCKET = System.getenv().getOrDefault("S3_BUCKET", "aeroguard-telemetry");
-    private static final String S3_PATH = System.getenv().getOrDefault("S3_PATH", "s3a://" + S3_BUCKET + "/raw");
+    private static final String S3_PATH = System.getenv().getOrDefault("S3_PATH", "file:///tmp/aeroguard-telemetry/raw");
 
     public static void main(String[] args) throws Exception {
+        System.setProperty("HADOOP_USER_NAME", "minioadmin");
         Configuration flinkConfig = new Configuration();
         flinkConfig.setString("fs.s3a.endpoint", S3_ENDPOINT);
         flinkConfig.setString("fs.s3a.access.key", S3_ACCESS_KEY);
@@ -59,6 +60,8 @@ public class TelemetryPipeline {
         flinkConfig.setString("fs.s3a.path.style.access", "true");
         flinkConfig.setString("fs.s3a.ssl.enabled", "false");
         flinkConfig.setString("fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
+        flinkConfig.setString("fs.allowed-fallback-filesystems", "s3a");
+        org.apache.flink.core.fs.FileSystem.initialize(flinkConfig, null);
 
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment(flinkConfig);
         env.enableCheckpointing(5000);
