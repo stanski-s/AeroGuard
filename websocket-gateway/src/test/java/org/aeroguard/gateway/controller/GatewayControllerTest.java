@@ -1,24 +1,13 @@
 package org.aeroguard.gateway.controller;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import org.aeroguard.gateway.exception.EventPublishingException;
+import org.aeroguard.gateway.publisher.ControlEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-import java.util.concurrent.CompletableFuture;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -26,24 +15,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class GatewayControllerTest {
 
     private MockMvc mockMvc;
-    private KafkaTemplate<String, String> kafkaTemplate;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private ControlEventPublisher eventPublisher;
 
-    @SuppressWarnings("unchecked")
     @BeforeEach
     void setUp() {
-        kafkaTemplate = mock(KafkaTemplate.class);
-        when(kafkaTemplate.send(anyString(), anyString(), anyString()))
-                .thenReturn(CompletableFuture.completedFuture(null));
-
-        GatewayController controller = new GatewayController(kafkaTemplate);
+        eventPublisher = mock(ControlEventPublisher.class);
+        GatewayController controller = new GatewayController(eventPublisher);
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 
     @Test
-    void triggerDiagnosticAction_withValidAction_shouldPublishToKafkaAndReturnSuccess() throws Exception {
-        ArgumentCaptor<String> payloadCaptor = ArgumentCaptor.forClass(String.class);
-
+    void triggerDiagnosticAction_withValidAction_shouldPublishToSeamAndReturnSuccess() throws Exception {
         mockMvc.perform(post("/api/assets/turbine-42/action")
                         .param("action", "LOCK_BRAKES"))
                 .andExpect(status().isOk())
@@ -51,16 +33,7 @@ class GatewayControllerTest {
                 .andExpect(jsonPath("$.assetId").value("turbine-42"))
                 .andExpect(jsonPath("$.action").value("LOCK_BRAKES"));
 
-        verify(kafkaTemplate).send(eq("events.status"), eq("turbine-42"), payloadCaptor.capture());
-
-        String capturedPayload = payloadCaptor.getValue();
-        assertNotNull(capturedPayload);
-
-        JsonNode jsonNode = objectMapper.readTree(capturedPayload);
-        assertEquals("turbine-42", jsonNode.get("assetId").asText());
-        assertEquals("LOCK_BRAKES", jsonNode.get("action").asText());
-        assertEquals("DIAGNOSTIC_ACTION", jsonNode.get("eventType").asText());
-        assertNotNull(jsonNode.get("timestamp"));
+        verify(eventPublisher).publishDiagnosticAction("turbine-42", "LOCK_BRAKES");
     }
 
     @Test
@@ -81,22 +54,44 @@ class GatewayControllerTest {
                 .andExpect(jsonPath("$.status").value("ERROR"))
                 .andExpect(jsonPath("$.message").exists());
 
-        verifyNoInteractions(kafkaTemplate);
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test
-    void triggerDiagnosticAction_whenKafkaFails_shouldReturnInternalServerError() throws Exception {
-        CompletableFuture<org.springframework.kafka.support.SendResult<String, String>> failedFuture =
-                new CompletableFuture<>();
-        failedFuture.completeExceptionally(new RuntimeException("Kafka cluster unreachable"));
-
-        when(kafkaTemplate.send(anyString(), anyString(), anyString())).thenReturn(failedFuture);
+    void triggerDiagnosticAction_whenPublisherFails_shouldReturnInternalServerError() throws Exception {
+        doThrow(new EventPublishingException("Kafka cluster unreachable"))
+                .when(eventPublisher).publishDiagnosticAction(anyString(), anyString());
 
         mockMvc.perform(post("/api/assets/turbine-42/action")
                         .param("action", "LOCK_BRAKES"))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.status").value("ERROR"))
-                .andExpect(jsonPath("$.message").exists());
+                .andExpect(jsonPath("$.message").value("Kafka cluster unreachable"));
+    }
+
+    @Test
+    void updateOperatingMode_shouldPublishAndReturnSuccess() throws Exception {
+        mockMvc.perform(post("/api/assets/turbine-1/operating-mode")
+                        .param("mode", "MAINTENANCE_MODE"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SUCCESS"))
+                .andExpect(jsonPath("$.assetId").value("turbine-1"))
+                .andExpect(jsonPath("$.operatingMode").value("MAINTENANCE_MODE"));
+
+        verify(eventPublisher).publishOperatingMode("turbine-1", "MAINTENANCE_MODE");
+    }
+
+    @Test
+    void triggerThermalSpike_shouldPublishAndReturnSuccess() throws Exception {
+        mockMvc.perform(post("/api/simulator/spike")
+                        .param("assetId", "turbine-5")
+                        .param("temperature", "92.4"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SUCCESS"))
+                .andExpect(jsonPath("$.assetId").value("turbine-5"))
+                .andExpect(jsonPath("$.temperature").value(92.4));
+
+        verify(eventPublisher).publishThermalSpike("turbine-5", 92.4);
     }
 
     private void performActionAndAssertSuccess(String assetId, String rawAction, String expectedAction) throws Exception {
@@ -106,5 +101,7 @@ class GatewayControllerTest {
                 .andExpect(jsonPath("$.status").value("SUCCESS"))
                 .andExpect(jsonPath("$.assetId").value(assetId))
                 .andExpect(jsonPath("$.action").value(expectedAction));
+
+        verify(eventPublisher).publishDiagnosticAction(assetId, expectedAction);
     }
 }

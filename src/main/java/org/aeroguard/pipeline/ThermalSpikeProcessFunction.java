@@ -1,6 +1,7 @@
 package org.aeroguard.pipeline;
 
 import org.aeroguard.model.Alert;
+import org.aeroguard.model.AssetAlertContext;
 import org.aeroguard.model.AssetEvent;
 import org.aeroguard.model.AssetOperatingModeEvent;
 import org.aeroguard.model.ConfigEvent;
@@ -148,13 +149,14 @@ public class ThermalSpikeProcessFunction extends KeyedBroadcastProcessFunction<S
                         }
                     }
 
-                    DiagnosticAction action = DiagnosticActionEngine.resolveAction(
-                            activeRules,
+                    AssetAlertContext alertContext = AssetAlertContext.of(
                             value.getAssetId(),
                             DEFAULT_ALERT_TYPE,
                             currentMode != null ? currentMode : "ONLINE",
                             "CRITICAL"
                     );
+
+                    DiagnosticAction action = DiagnosticActionEngine.resolveAction(alertContext, activeRules);
 
                     Alert alert = new Alert(
                             alertId,

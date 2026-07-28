@@ -38,13 +38,14 @@ public class DiagnosticActionEngineTest {
 
         rulesMap.put(rule.getRuleId(), rule);
 
-        DiagnosticAction resolved = DiagnosticActionEngine.resolveAction(
-                rulesMap.values(),
+        AssetAlertContext context = AssetAlertContext.of(
                 "WIND-TURBINE-01",
                 "THERMAL_SPIKE",
                 "ONLINE",
                 "CRITICAL"
         );
+
+        DiagnosticAction resolved = DiagnosticActionEngine.resolveAction(context, rulesMap.values());
 
         assertNotNull(resolved);
         assertEquals("ACT-001", resolved.getActionId());
@@ -90,13 +91,14 @@ public class DiagnosticActionEngineTest {
         rulesMap.put(globalRule.getRuleId(), globalRule);
         rulesMap.put(specificRule.getRuleId(), specificRule);
 
-        DiagnosticAction resolved = DiagnosticActionEngine.resolveAction(
-                rulesMap.values(),
+        AssetAlertContext context = AssetAlertContext.of(
                 "WIND-TURBINE-01",
                 "THERMAL_SPIKE",
                 "ONLINE",
                 "CRITICAL"
         );
+
+        DiagnosticAction resolved = DiagnosticActionEngine.resolveAction(context, rulesMap.values());
 
         assertNotNull(resolved);
         assertEquals("ACT-HIGH", resolved.getActionId());
@@ -105,17 +107,34 @@ public class DiagnosticActionEngineTest {
 
     @Test
     public void testFallbackActionWhenNoRuleMatches() {
-        DiagnosticAction resolved = DiagnosticActionEngine.resolveAction(
-                rulesMap.values(),
+        AssetAlertContext context = AssetAlertContext.of(
                 "UNKNOWN-ASSET",
                 "VIBRATION_ANOMALY",
                 "ONLINE",
                 "CRITICAL"
         );
 
+        DiagnosticAction resolved = DiagnosticActionEngine.resolveAction(context, rulesMap.values());
+
         assertNotNull(resolved);
         assertTrue(resolved.getActionId().startsWith("FALLBACK-"));
         assertEquals("Dispatch Tech Team & Manual Inspection Required", resolved.getTitle());
         assertTrue(resolved.isFallback());
+    }
+
+    @Test
+    public void testWarningFallbackAction() {
+        AssetAlertContext context = AssetAlertContext.of(
+                "UNKNOWN-ASSET",
+                "VIBRATION_ANOMALY",
+                "ONLINE",
+                "WARNING"
+        );
+
+        DiagnosticAction resolved = DiagnosticActionEngine.resolveAction(context, rulesMap.values());
+
+        assertNotNull(resolved);
+        assertEquals("FALLBACK-WARNING", resolved.getActionId());
+        assertEquals("Monitor Sensor Telemetry", resolved.getTitle());
     }
 }
