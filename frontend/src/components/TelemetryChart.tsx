@@ -3,20 +3,22 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
 import * as echarts from "echarts";
 import { useTelemetryStore } from "@/store/useTelemetryStore";
-import { Activity, Flame } from "lucide-react";
+import { Activity, Flame, AlertTriangle } from "lucide-react";
+
+type MetricMode = "temperature" | "vibration" | "powerOutputMw" | "rotorSpeedRpm" | "pitchAngleDeg";
 
 export function TelemetryChart() {
   const chartRef = useRef<HTMLDivElement>(null);
   const chartInstance = useRef<echarts.ECharts | null>(null);
 
-  // Fine-grained selectors
   const selectedAssetId = useTelemetryStore((state) => state.selectedAssetId);
   const setSelectedAssetId = useTelemetryStore((state) => state.setSelectedAssetId);
   const assets = useTelemetryStore((state) => state.assets);
   const telemetryHistory = useTelemetryStore((state) => state.telemetryHistory);
   const alerts = useTelemetryStore((state) => state.alerts);
+  const isConnected = useTelemetryStore((state) => state.isConnected);
 
-  const [metricMode, setMetricMode] = useState<"temperature" | "vibration">("temperature");
+  const [metricMode, setMetricMode] = useState<MetricMode>("temperature");
 
   const selectedAsset = assets.find((a) => a.id === selectedAssetId) || assets[0];
 
@@ -26,13 +28,12 @@ export function TelemetryChart() {
 
   const activeAlert = alerts.find((a) => a.asset_id === selectedAssetId);
 
-  // Initialize ECharts with Canvas/WebGL renderer & dark theme
   useEffect(() => {
     if (!chartRef.current) return;
 
     if (!chartInstance.current) {
-      chartInstance.current = echarts.init(chartRef.current, "dark", {
-        renderer: "canvas", // WebGL/Canvas high-performance rendering engine
+      chartInstance.current = echarts.init(chartRef.current, undefined, {
+        renderer: "canvas",
       });
     }
 
@@ -49,7 +50,6 @@ export function TelemetryChart() {
     };
   }, []);
 
-  // Update ECharts options whenever telemetry points, metric mode or asset change
   useEffect(() => {
     if (!chartInstance.current) return;
 
@@ -61,73 +61,105 @@ export function TelemetryChart() {
       })
     );
 
-    const dataValues = historyPoints.map((p) =>
-      metricMode === "temperature" ? p.temperature : p.vibration
-    );
+    const dataValues = historyPoints.map((p) => {
+      switch (metricMode) {
+        case "temperature":
+          return p.temperature;
+        case "vibration":
+          return p.vibration;
+        case "powerOutputMw":
+          return p.powerOutputMw ?? selectedAsset?.powerOutputMw ?? 12.5;
+        case "rotorSpeedRpm":
+          return p.rotorSpeedRpm ?? selectedAsset?.rotorSpeedRpm ?? 7.5;
+        case "pitchAngleDeg":
+          return p.pitchAngleDeg ?? selectedAsset?.pitchAngleDeg ?? 4.2;
+      }
+    });
 
     const isTempMode = metricMode === "temperature";
-    const thresholdVal = isTempMode ? 80.0 : 0.35;
-    const hasSpike = dataValues.some((v) => v > thresholdVal);
+    const thresholdVal = isTempMode ? 80.0 : metricMode === "vibration" ? 0.35 : null;
+    const hasSpike = isTempMode && dataValues.some((v) => v > 80.0);
 
     const lineColor = isTempMode
       ? hasSpike
-        ? "#f43f5e" // Rose
-        : "#06b6d4" // Cyan
-      : "#a855f7"; // Purple for vibration
+        ? "#ba1a1a"
+        : "#004080"
+      : metricMode === "vibration"
+      ? "#006a6a"
+      : "#004080";
+
+    const getUnit = () => {
+      switch (metricMode) {
+        case "temperature": return "°C";
+        case "vibration": return " g";
+        case "powerOutputMw": return " MW";
+        case "rotorSpeedRpm": return " RPM";
+        case "pitchAngleDeg": return "°";
+      }
+    };
+
+    const getMetricName = () => {
+      switch (metricMode) {
+        case "temperature": return "Generator Temp";
+        case "vibration": return "Vibration Level";
+        case "powerOutputMw": return "Power Output";
+        case "rotorSpeedRpm": return "Rotor Speed";
+        case "pitchAngleDeg": return "Pitch Angle";
+      }
+    };
 
     const option: echarts.EChartsOption = {
       backgroundColor: "transparent",
       tooltip: {
         trigger: "axis",
-        backgroundColor: "rgba(15, 23, 42, 0.9)",
-        borderColor: "#334155",
-        textStyle: { color: "#f8fafc", fontFamily: "monospace", fontSize: 12 },
+        backgroundColor: "rgba(255, 255, 255, 0.95)",
+        borderColor: "#c3c6d2",
+        textStyle: { color: "#0d1c2e", fontFamily: "monospace", fontSize: 12 },
         formatter: (params: any) => {
           if (!Array.isArray(params) || params.length === 0) return "";
           const p = params[0];
-          const unit = isTempMode ? "°C" : " g";
+          const unit = getUnit();
           const val = p.value;
           const conditionText =
-            val > thresholdVal
-              ? "<span style='color:#f43f5e;font-weight:bold;'>CRITICAL BREACH</span>"
-              : "<span style='color:#34d399;'>NORMAL</span>";
+            thresholdVal && val > thresholdVal
+              ? "<span style='color:#ba1a1a;font-weight:bold;'>CRITICAL BREACH</span>"
+              : "<span style='color:#006a6a;font-weight:bold;'>NOMINAL</span>";
           return `
             <div style="font-weight:bold;margin-bottom:4px;">${p.name}</div>
             <div>Value: <b>${val}${unit}</b></div>
-            <div>Operating Condition: ${conditionText}</div>
+            <div>Condition: ${conditionText}</div>
           `;
         },
       },
       grid: {
-        top: 45,
+        top: 40,
         left: 45,
         right: 25,
-        bottom: 35,
+        bottom: 30,
         containLabel: false,
       },
       xAxis: {
         type: "category",
         data: times,
         boundaryGap: false,
-        axisLine: { lineStyle: { color: "#334155" } },
-        axisLabel: { color: "#94a3b8", fontFamily: "monospace", fontSize: 10 },
+        axisLine: { lineStyle: { color: "#c3c6d2" } },
+        axisLabel: { color: "#424750", fontFamily: "monospace", fontSize: 10 },
       },
       yAxis: {
         type: "value",
-        min: isTempMode ? 50 : 0,
-        max: isTempMode ? 100 : 0.5,
+        min: isTempMode ? 30 : 0,
         axisLine: { show: false },
-        splitLine: { lineStyle: { color: "rgba(51, 65, 85, 0.4)", type: "dashed" } },
+        splitLine: { lineStyle: { color: "rgba(195, 198, 210, 0.5)", type: "dashed" } },
         axisLabel: {
-          color: "#94a3b8",
+          color: "#424750",
           fontFamily: "monospace",
           fontSize: 10,
-          formatter: (val: number) => (isTempMode ? `${val}°C` : `${val}`),
+          formatter: (val: number) => `${val}${getUnit()}`,
         },
       },
       series: [
         {
-          name: isTempMode ? "Generator Temp" : "Vibration Level",
+          name: getMetricName(),
           type: "line",
           smooth: true,
           showSymbol: false,
@@ -139,70 +171,81 @@ export function TelemetryChart() {
                 offset: 0,
                 color: isTempMode
                   ? hasSpike
-                    ? "rgba(244, 63, 94, 0.4)"
-                    : "rgba(6, 182, 212, 0.35)"
-                  : "rgba(168, 85, 247, 0.35)",
+                    ? "rgba(186, 26, 26, 0.3)"
+                    : "rgba(0, 64, 128, 0.25)"
+                  : "rgba(0, 106, 106, 0.25)",
               },
-              { offset: 1, color: "rgba(15, 23, 42, 0.0)" },
+              { offset: 1, color: "rgba(248, 249, 255, 0.0)" },
             ]),
           },
-          markLine: {
-            symbol: "none",
-            data: [
-              {
-                yAxis: thresholdVal,
-                name: "Critical Threshold",
-                lineStyle: { color: "#f43f5e", type: "dashed", width: 1.5 },
-                label: {
-                  formatter: `Threshold (${thresholdVal}${isTempMode ? "°C" : ""})`,
-                  color: "#f43f5e",
-                  fontFamily: "monospace",
-                  fontSize: 10,
-                  position: "insideEndTop",
+          ...(thresholdVal ? {
+            markLine: {
+              symbol: "none",
+              data: [
+                {
+                  yAxis: thresholdVal,
+                  name: "Critical Threshold",
+                  lineStyle: { color: "#ba1a1a", type: "dashed", width: 1.5 },
+                  label: {
+                    formatter: `Threshold (${thresholdVal}${getUnit()})`,
+                    color: "#ba1a1a",
+                    fontFamily: "monospace",
+                    fontSize: 10,
+                    position: "insideEndTop",
+                  },
                 },
-              },
-            ],
-          },
+              ],
+            },
+          } : {}),
         },
       ],
     };
 
     chartInstance.current.setOption(option, { notMerge: false, lazyUpdate: true });
-  }, [historyPoints, metricMode, selectedAssetId]);
+  }, [historyPoints, metricMode, selectedAssetId, selectedAsset]);
 
   const latestPoint = historyPoints[historyPoints.length - 1];
 
+  const getLatestDisplay = () => {
+    if (!latestPoint) return "--";
+    switch (metricMode) {
+      case "temperature": return `${latestPoint.temperature.toFixed(1)}°C`;
+      case "vibration": return `${latestPoint.vibration.toFixed(3)}g`;
+      case "powerOutputMw": return `${(latestPoint.powerOutputMw ?? 12.5).toFixed(1)} MW`;
+      case "rotorSpeedRpm": return `${(latestPoint.rotorSpeedRpm ?? 7.5).toFixed(1)} RPM`;
+      case "pitchAngleDeg": return `${(latestPoint.pitchAngleDeg ?? 4.2).toFixed(1)}°`;
+    }
+  };
+
   return (
-    <div className="relative w-full h-[520px] rounded-2xl border border-slate-800 bg-slate-950 p-5 flex flex-col justify-between shadow-2xl">
+    <div className="relative w-full h-[520px] rounded-lg border border-[#c3c6d2] bg-white p-5 flex flex-col justify-between shadow-xs">
       {/* Chart Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#c3c6d2]">
         <div className="flex items-center gap-3">
-          <div className={`flex h-9 w-9 items-center justify-center rounded-xl border ${
-            activeAlert ? "bg-rose-500/10 border-rose-500/40 text-rose-400" : "bg-cyan-500/10 border-cyan-500/30 text-cyan-400"
-          }`}>
+          <div className="flex h-9 w-9 items-center justify-center rounded border bg-[#eff4ff] border-[#c3c6d2] text-[#004080]">
             <Activity className="h-5 w-5" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-bold text-white tracking-tight">
-                Live Streaming Telemetry
+              <h3 className="text-sm font-bold text-[#002a58] tracking-tight font-sans">
+                Live Telemetry Stream
               </h3>
-              <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">
-                ECharts Canvas/WebGL
+              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-[#eff4ff] text-[#004080] border border-[#004080]/20">
+                ECharts Stream
               </span>
             </div>
-            <p className="text-xs text-slate-400">
-              High-frequency time series telemetry feed
+            <p className="text-xs text-[#424750]">
+              Real-time Kafka WebSocket telemetry feed
             </p>
           </div>
         </div>
 
-        {/* Controls: Asset Selector & Metric Toggle */}
-        <div className="flex items-center gap-2.5">
+        {/* Controls */}
+        <div className="flex items-center gap-2 flex-wrap">
           <select
             value={selectedAssetId || ""}
             onChange={(e) => setSelectedAssetId(e.target.value)}
-            className="bg-slate-900 border border-slate-700 text-slate-200 text-xs font-mono rounded-lg px-2.5 py-1.5 focus:ring-1 focus:ring-cyan-500 outline-none"
+            className="bg-[#f8f9ff] border border-[#c3c6d2] text-[#002a58] text-xs font-mono rounded px-2.5 py-1.5 focus:ring-1 focus:ring-[#004080] outline-none"
           >
             {assets.map((asset) => (
               <option key={asset.id} value={asset.id}>
@@ -211,26 +254,56 @@ export function TelemetryChart() {
             ))}
           </select>
 
-          <div className="flex bg-slate-900 border border-slate-800 rounded-lg p-0.5 text-xs font-mono">
+          <div className="flex bg-[#f8f9ff] border border-[#c3c6d2] rounded p-0.5 text-xs font-mono">
             <button
               onClick={() => setMetricMode("temperature")}
-              className={`px-2.5 py-1 rounded-md transition-colors ${
+              className={`px-2 py-1 rounded transition-colors ${
                 metricMode === "temperature"
-                  ? "bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/30"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "bg-[#004080] text-white font-bold"
+                  : "text-[#424750] hover:text-[#002a58]"
               }`}
             >
-              Temp (°C)
+              Temp
             </button>
             <button
               onClick={() => setMetricMode("vibration")}
-              className={`px-2.5 py-1 rounded-md transition-colors ${
+              className={`px-2 py-1 rounded transition-colors ${
                 metricMode === "vibration"
-                  ? "bg-purple-500/20 text-purple-300 font-bold border border-purple-500/30"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "bg-[#006a6a] text-white font-bold"
+                  : "text-[#424750] hover:text-[#002a58]"
               }`}
             >
-              Vibration
+              Vib
+            </button>
+            <button
+              onClick={() => setMetricMode("powerOutputMw")}
+              className={`px-2 py-1 rounded transition-colors ${
+                metricMode === "powerOutputMw"
+                  ? "bg-[#004080] text-white font-bold"
+                  : "text-[#424750] hover:text-[#002a58]"
+              }`}
+            >
+              Power
+            </button>
+            <button
+              onClick={() => setMetricMode("rotorSpeedRpm")}
+              className={`px-2 py-1 rounded transition-colors ${
+                metricMode === "rotorSpeedRpm"
+                  ? "bg-[#004080] text-white font-bold"
+                  : "text-[#424750] hover:text-[#002a58]"
+              }`}
+            >
+              Rotor
+            </button>
+            <button
+              onClick={() => setMetricMode("pitchAngleDeg")}
+              className={`px-2 py-1 rounded transition-colors ${
+                metricMode === "pitchAngleDeg"
+                  ? "bg-[#004080] text-white font-bold"
+                  : "text-[#424750] hover:text-[#002a58]"
+              }`}
+            >
+              Pitch
             </button>
           </div>
         </div>
@@ -239,22 +312,18 @@ export function TelemetryChart() {
       {/* Live Value Indicator */}
       <div className="flex items-center justify-between mt-3 px-1">
         <div className="flex items-baseline gap-3">
-          <span className="text-3xl font-bold font-mono text-white tracking-tight">
-            {latestPoint
-              ? metricMode === "temperature"
-                ? `${latestPoint.temperature.toFixed(1)}°C`
-                : `${latestPoint.vibration.toFixed(3)}g`
-              : "--"}
+          <span className="text-3xl font-bold font-mono text-[#002a58] tracking-tight">
+            {getLatestDisplay()}
           </span>
-          <span className="text-xs font-mono text-slate-400">
+          <span className="text-xs font-mono text-[#424750]">
             {selectedAsset ? selectedAsset.name : ""}
           </span>
         </div>
 
         {activeAlert && (
-          <div className="flex items-center gap-1.5 text-rose-400 bg-rose-500/10 border border-rose-500/30 px-2.5 py-1 rounded-lg text-xs font-mono font-bold animate-pulse">
+          <div className="flex items-center gap-1.5 text-[#ba1a1a] bg-[#ffdad6] border border-[#ba1a1a]/40 px-2.5 py-1 rounded text-xs font-mono font-bold animate-pulse">
             <Flame className="h-4 w-4" />
-            <span>THRESHOLD EXCEEDED (&gt;80.0°C)</span>
+            <span>THRESHOLD BREACH (&gt;80.0°C)</span>
           </div>
         )}
       </div>
@@ -262,12 +331,21 @@ export function TelemetryChart() {
       {/* ECharts Render Container */}
       <div className="relative flex-1 w-full mt-2">
         <div ref={chartRef} className="absolute inset-0 w-full h-full" />
+
+        {historyPoints.length === 0 && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm rounded-lg p-6 text-center border border-[#c3c6d2]">
+            <AlertTriangle className="h-6 w-6 text-[#ba1a1a] animate-pulse mb-2" />
+            <h4 className="text-xs font-bold text-[#ba1a1a] font-mono">
+              {isConnected ? "WAITING FOR KAFKA TELEMETRY STREAM" : "WEBSOCKET GATEWAY DISCONNECTED"}
+            </h4>
+          </div>
+        )}
       </div>
 
       {/* Footer Info */}
-      <div className="flex items-center justify-between text-[11px] font-mono text-slate-500 pt-2 border-t border-slate-900">
-        <span>Window: 60s Rolling Buffer • Canvas/WebGL Engine</span>
-        <span>Keyed Process Function Stream</span>
+      <div className="flex items-center justify-between text-[10px] font-mono text-[#737781] pt-2 border-t border-[#c3c6d2]">
+        <span>Window: 60s Rolling Buffer • ECharts Engine</span>
+        <span>Keyed Process Function</span>
       </div>
     </div>
   );

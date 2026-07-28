@@ -20,7 +20,7 @@ class TelemetrySimulatorTest {
         // Run simulator for 20 steps under normal operation
         Telemetry prev = null;
         for (int i = 0; i < 20; i++) {
-            Telemetry current = simulator.generateNextTelemetry("turbine-1");
+            Telemetry current = simulator.generateNextTelemetry("BAL-WTG-001");
             assertNotNull(current);
 
             // Bounds check for normal operation as specified in 01-extended-telemetry-model.md
@@ -41,7 +41,7 @@ class TelemetrySimulatorTest {
 
     @Test
     void testThermalSpikeFaultInjection() {
-        String assetId = "turbine-3";
+        String assetId = "BAL-WTG-003";
         simulator.injectFault(assetId, TelemetrySimulator.FaultType.THERMAL_SPIKE);
 
         // Advance simulation steps
@@ -59,7 +59,7 @@ class TelemetrySimulatorTest {
 
     @Test
     void testHighVibrationFaultInjection() {
-        String assetId = "turbine-2";
+        String assetId = "BAL-WTG-002";
         simulator.injectFault(assetId, TelemetrySimulator.FaultType.HIGH_VIBRATION);
 
         Telemetry telemetry = null;
@@ -74,7 +74,7 @@ class TelemetrySimulatorTest {
 
     @Test
     void testOverspeedFaultInjection() {
-        String assetId = "turbine-4";
+        String assetId = "BAL-WTG-004";
         simulator.injectFault(assetId, TelemetrySimulator.FaultType.OVERSPEED);
 
         Telemetry telemetry = null;
@@ -89,7 +89,7 @@ class TelemetrySimulatorTest {
 
     @Test
     void testPitchAsymmetryFaultInjection() {
-        String assetId = "turbine-5";
+        String assetId = "BAL-WTG-005";
         simulator.injectFault(assetId, TelemetrySimulator.FaultType.PITCH_ASYMMETRY);
 
         Telemetry telemetry = null;
@@ -104,7 +104,7 @@ class TelemetrySimulatorTest {
 
     @Test
     void testClearFaultRestoresNormalOperation() {
-        String assetId = "turbine-2";
+        String assetId = "BAL-WTG-002";
         simulator.injectFault(assetId, TelemetrySimulator.FaultType.HIGH_VIBRATION);
         simulator.generateNextTelemetry(assetId);
 

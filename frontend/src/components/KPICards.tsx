@@ -2,75 +2,83 @@
 
 import React from "react";
 import { useTelemetryStore } from "@/store/useTelemetryStore";
-import { AlertOctagon, Activity, Zap, Database } from "lucide-react";
-import { countAssetsByOperatingMode } from "@/utils/assetHelpers";
+import { AlertOctagon, Zap, Database, WifiOff } from "lucide-react";
 
 export function KPICards() {
   const alerts = useTelemetryStore((state) => state.alerts);
   const assets = useTelemetryStore((state) => state.assets);
+  const isConnected = useTelemetryStore((state) => state.isConnected);
+  const telemetryHistory = useTelemetryStore((state) => state.telemetryHistory);
 
   const criticalCount = alerts.length;
-  const { online, maintenance } = countAssetsByOperatingMode(assets);
+  const totalPoints = Object.values(telemetryHistory).reduce((acc, pts) => acc + pts.length, 0);
+
+  // Count only assets that actually have incoming stream data
+  const activeStreamingAssetsCount = Object.keys(telemetryHistory).filter(
+    (id) => telemetryHistory[id] && telemetryHistory[id].length > 0
+  ).length;
 
   return (
-    <section className="grid grid-cols-1 md:grid-cols-4 gap-5">
+    <section className="grid grid-cols-1 md:grid-cols-3 gap-5">
       {/* Active Alerts KPI */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 backdrop-blur-md shadow-xl flex flex-col justify-between">
-        <div className="flex items-center justify-between text-slate-400">
-          <span className="text-xs font-medium uppercase tracking-wider font-mono">Active Anomaly Alerts</span>
-          <AlertOctagon className={`h-5 w-5 ${criticalCount > 0 ? "text-rose-500 animate-pulse" : "text-slate-500"}`} />
+      <div className="bg-white border border-[#c3c6d2] p-5 rounded-lg shadow-sm flex flex-col justify-between">
+        <div className="flex items-center justify-between text-[#424750]">
+          <span className="text-xs font-bold uppercase tracking-wider font-mono">Active Anomaly Alerts</span>
+          <AlertOctagon className={`h-5 w-5 ${criticalCount > 0 ? "text-[#ba1a1a] animate-pulse" : "text-[#737781]"}`} />
         </div>
         <div className="mt-3">
-          <p className="text-3xl font-bold text-white font-mono">{criticalCount}</p>
-          <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
+          <p className="text-3xl font-bold text-[#002a58] font-mono">{criticalCount}</p>
+          <p className="text-xs text-[#424750] mt-1 flex items-center gap-1">
             {criticalCount > 0 ? (
-              <span className="text-rose-400 font-semibold font-mono">Thermal Threshold Breaches (&gt;80°C)</span>
+              <span className="text-[#ba1a1a] font-semibold font-mono">Thermal Threshold Breaches (&gt;80°C)</span>
             ) : (
-              <span className="text-emerald-400 font-semibold font-mono">All assets operating normally</span>
+              <span className="text-[#006a6a] font-semibold font-mono">All assets operating normally</span>
             )}
           </p>
         </div>
       </div>
 
       {/* Asset Fleet Status KPI */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 backdrop-blur-md shadow-xl flex flex-col justify-between">
-        <div className="flex items-center justify-between text-slate-400">
-          <span className="text-xs font-medium uppercase tracking-wider font-mono">Monitored Assets</span>
-          <Zap className="h-5 w-5 text-amber-400" />
+      <div className="bg-white border border-[#c3c6d2] p-5 rounded-lg shadow-sm flex flex-col justify-between">
+        <div className="flex items-center justify-between text-[#424750]">
+          <span className="text-xs font-bold uppercase tracking-wider font-mono">Monitored Assets</span>
+          <Zap className={`h-5 w-5 ${isConnected ? "text-[#004080]" : "text-[#ba1a1a]"}`} />
         </div>
         <div className="mt-3">
-          <p className="text-3xl font-bold text-white font-mono">{assets.length}</p>
-          <p className="text-xs text-slate-400 mt-1 font-mono">
-            <span className="text-emerald-400">{online} Online</span> •{" "}
-            <span className="text-amber-400">{maintenance} Maintenance</span>
-          </p>
+          {isConnected ? (
+            <>
+              <p className="text-3xl font-bold text-[#002a58] font-mono">
+                {activeStreamingAssetsCount}<span className="text-lg text-[#737781]">/{assets.length}</span>
+              </p>
+              <p className="text-[11px] text-[#006a6a] font-bold mt-1 font-mono">
+                {activeStreamingAssetsCount} Active Stream Feeds
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-xl font-bold text-[#ba1a1a] font-mono flex items-center gap-1.5">
+                <WifiOff className="h-4 w-4" /> DISCONNECTED
+              </p>
+              <p className="text-xs text-[#737781] mt-1 font-mono italic">
+                No WebSocket connection to backend
+              </p>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Stream Engine KPI */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 backdrop-blur-md shadow-xl flex flex-col justify-between">
-        <div className="flex items-center justify-between text-slate-400">
-          <span className="text-xs font-medium uppercase tracking-wider font-mono">Stream Processing Engine</span>
-          <Activity className="h-5 w-5 text-blue-400" />
+      {/* Ingestion Pipeline KPI */}
+      <div className="bg-white border border-[#c3c6d2] p-5 rounded-lg shadow-sm flex flex-col justify-between">
+        <div className="flex items-center justify-between text-[#424750]">
+          <span className="text-xs font-bold uppercase tracking-wider font-mono">Ingestion Pipeline</span>
+          <Database className="h-5 w-5 text-[#006a6a]" />
         </div>
         <div className="mt-3">
-          <p className="text-xl font-bold text-white font-mono">Apache Flink</p>
-          <p className="text-xs text-slate-400 mt-1 font-mono">
-            Keyed Process Function • Rolling State
+          <p className={`text-xl font-bold font-mono ${isConnected ? "text-[#006a6a]" : "text-[#ba1a1a]"}`}>
+            {isConnected ? "WS Stream Active" : "Disconnected"}
           </p>
-        </div>
-      </div>
-
-      {/* Gateway & Pipeline KPI */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 backdrop-blur-md shadow-xl flex flex-col justify-between">
-        <div className="flex items-center justify-between text-slate-400">
-          <span className="text-xs font-medium uppercase tracking-wider font-mono">Ingestion Pipeline</span>
-          <Database className="h-5 w-5 text-emerald-400" />
-        </div>
-        <div className="mt-3">
-          <p className="text-xl font-bold text-emerald-400 font-mono">10,000+ msg/s</p>
-          <p className="text-xs text-slate-400 mt-1 font-mono">
-            Kafka: telemetry.raw &amp; alerts.critical
+          <p className="text-xs text-[#424750] mt-1 font-mono">
+            Kafka: telemetry.raw ({totalPoints} recs)
           </p>
         </div>
       </div>

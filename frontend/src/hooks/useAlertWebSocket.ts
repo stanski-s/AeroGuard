@@ -50,6 +50,10 @@ export function useTelemetryStream(url: string = DEFAULT_WS_URL) {
                   sensor_id: payload.sensorId || payload.sensor_id || `temp-${payload.assetId}`,
                   temperature: payload.temperature,
                   vibration: payload.vibration,
+                  powerOutputMw: payload.powerOutputMw ?? payload.power_output_mw,
+                  pitchAngleDeg: payload.pitchAngleDeg ?? payload.pitch_angle_deg,
+                  rotorSpeedRpm: payload.rotorSpeedRpm ?? payload.rotor_speed_rpm,
+                  nacelleTempC: payload.nacelleTempC ?? payload.nacelle_temp_c,
                   timestamp: payload.timestamp || new Date().toISOString(),
                 };
                 addTelemetryPoint(point);

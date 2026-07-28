@@ -29,8 +29,8 @@ public class TelemetrySimulator {
     }
 
     public static final String[] ASSET_IDS = {
-            "turbine-1", "turbine-2", "turbine-3", "turbine-4", "turbine-5", "turbine-6", "turbine-7",
-            "microgrid-1", "microgrid-2", "substation-1"
+            "BAL-WTG-001", "BAL-WTG-002", "BAL-WTG-003", "BAL-WTG-004", "BAL-WTG-005",
+            "BAL-WTG-006", "BAL-WTG-007", "BAL-WTG-008", "BAL-WTG-009", "BAL-WTG-010"
     };
 
     private final Map<String, TurbineState> states = new ConcurrentHashMap<>();
@@ -196,15 +196,15 @@ public class TelemetrySimulator {
 
                 // Periodically inject realistic faults for live demonstration / alerting testing
                 if (stepCounter == 100) {
-                    simulator.injectFault("turbine-3", FaultType.THERMAL_SPIKE);
+                    simulator.injectFault("BAL-WTG-003", FaultType.THERMAL_SPIKE);
                 } else if (stepCounter == 250) {
-                    simulator.injectFault("turbine-2", FaultType.HIGH_VIBRATION);
+                    simulator.injectFault("BAL-WTG-006", FaultType.HIGH_VIBRATION);
                 } else if (stepCounter == 400) {
-                    simulator.injectFault("turbine-4", FaultType.OVERSPEED);
+                    simulator.injectFault("BAL-WTG-004", FaultType.OVERSPEED);
                 } else if (stepCounter == 600) {
-                    simulator.clearFault("turbine-3");
-                    simulator.clearFault("turbine-2");
-                    simulator.clearFault("turbine-4");
+                    simulator.clearFault("BAL-WTG-003");
+                    simulator.clearFault("BAL-WTG-006");
+                    simulator.clearFault("BAL-WTG-004");
                 }
 
                 for (String assetId : ASSET_IDS) {
