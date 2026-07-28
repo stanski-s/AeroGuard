@@ -8,6 +8,9 @@ import org.aeroguard.model.Telemetry;
 import org.aeroguard.model.ThresholdConfig;
 import org.aeroguard.util.JsonMapperUtil;
 import org.aeroguard.model.TelemetryRecord;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.functions.AggregateFunction;
 import org.apache.flink.api.common.functions.RichMapFunction;
@@ -34,6 +37,10 @@ import org.slf4j.LoggerFactory;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
+import java.util.Properties;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public class TelemetryPipeline {
     private static final Logger logger = LoggerFactory.getLogger(TelemetryPipeline.class);
@@ -41,8 +48,9 @@ public class TelemetryPipeline {
     private static final String TOPIC = "telemetry.raw";
     private static final String THRESHOLD_TOPIC = "config.thresholds";
     private static final String OPERATING_MODE_TOPIC = "events.status";
+    private static final String ALERT_TOPIC = "alerts.critical";
     private static final String KAFKA_BOOTSTRAP_SERVERS = System.getenv().getOrDefault("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092");
-    private static final String DB_URL = System.getenv().getOrDefault("DB_URL", "jdbc:postgresql://localhost:5432/aeroguard");
+    private static final String DB_URL = System.getenv().getOrDefault("DB_URL", "jdbc:postgresql://localhost:5433/aeroguard");
     private static final String DB_USER = System.getenv().getOrDefault("DB_USER", "admin");
     private static final String DB_PASSWORD = System.getenv().getOrDefault("DB_PASSWORD", "password");
     private static final String S3_ENDPOINT = System.getenv().getOrDefault("S3_ENDPOINT", "http://localhost:9000");
@@ -51,9 +59,32 @@ public class TelemetryPipeline {
     private static final String S3_BUCKET = System.getenv().getOrDefault("S3_BUCKET", "aeroguard-telemetry");
     private static final String S3_PATH = System.getenv().getOrDefault("S3_PATH", "file:///tmp/aeroguard-telemetry/raw");
 
+    private static void ensureTopicsExist() {
+        Properties props = new Properties();
+        props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA_BOOTSTRAP_SERVERS);
+        try (AdminClient adminClient = AdminClient.create(props)) {
+            List<String> requiredTopics = List.of(TOPIC, THRESHOLD_TOPIC, OPERATING_MODE_TOPIC, ALERT_TOPIC);
+            Set<String> existingTopics = adminClient.listTopics().names().get();
+            List<NewTopic> newTopics = requiredTopics.stream()
+                    .filter(t -> !existingTopics.contains(t))
+                    .map(t -> new NewTopic(t, 1, (short) 1))
+                    .collect(Collectors.toList());
+            if (!newTopics.isEmpty()) {
+                adminClient.createTopics(newTopics).all().get();
+                logger.info("Successfully created missing Kafka topics: {}", newTopics);
+            }
+        } catch (Exception e) {
+            logger.warn("Could not pre-create Kafka topics via AdminClient: {}", e.getMessage());
+        }
+    }
+
     public static void main(String[] args) throws Exception {
+        ensureTopicsExist();
+
         System.setProperty("HADOOP_USER_NAME", "minioadmin");
         Configuration flinkConfig = new Configuration();
+        flinkConfig.setString("security.delegation.token.provider.hadoopfs.enabled", "false");
+        flinkConfig.setString("security.delegation.token.provider.hbase.enabled", "false");
         flinkConfig.setString("fs.s3a.endpoint", S3_ENDPOINT);
         flinkConfig.setString("fs.s3a.access.key", S3_ACCESS_KEY);
         flinkConfig.setString("fs.s3a.secret.key", S3_SECRET_KEY);
@@ -167,7 +198,7 @@ public class TelemetryPipeline {
                 .setBootstrapServers(KAFKA_BOOTSTRAP_SERVERS)
                 .setRecordSerializer(
                         KafkaRecordSerializationSchema.<String>builder()
-                                .setTopic("alerts.critical")
+                                .setTopic(ALERT_TOPIC)
                                 .setValueSerializationSchema(new SimpleStringSchema())
                                 .build()
                 )

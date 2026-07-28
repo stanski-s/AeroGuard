@@ -86,4 +86,33 @@ public class GatewayController {
             return ResponseEntity.internalServerError().body(errorResponse);
         }
     }
+
+    @PostMapping("/assets/{assetId}/action")
+    public ResponseEntity<Map<String, Object>> triggerDiagnosticAction(
+            @PathVariable("assetId") String assetId,
+            @RequestParam("action") String action) {
+        try {
+            Map<String, Object> event = new HashMap<>();
+            event.put("assetId", assetId);
+            event.put("action", action);
+            event.put("timestamp", Instant.now().toString());
+
+            String jsonPayload = objectMapper.writeValueAsString(event);
+            kafkaTemplate.send("events.status", assetId, jsonPayload);
+
+            logger.info("Published DiagnosticAction to Kafka events.status for asset {}: action={}", assetId, action);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "SUCCESS");
+            response.put("assetId", assetId);
+            response.put("action", action);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            logger.error("Failed to publish DiagnosticAction for asset {}", assetId, e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("status", "ERROR");
+            errorResponse.put("message", e.getMessage());
+            return ResponseEntity.internalServerError().body(errorResponse);
+        }
+    }
 }
