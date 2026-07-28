@@ -23,15 +23,15 @@ class TelemetrySimulatorTest {
             Telemetry current = simulator.generateNextTelemetry("turbine-1");
             assertNotNull(current);
 
-            // Bounds check for normal operation
-            assertTrue(current.getPowerOutputMw() >= 11.5 && current.getPowerOutputMw() <= 14.5,
-                    "Power output should be within normal bounds: " + current.getPowerOutputMw());
-            assertTrue(current.getPitchAngleDeg() >= 3.5 && current.getPitchAngleDeg() <= 5.5,
-                    "Pitch angle should be within normal bounds: " + current.getPitchAngleDeg());
-            assertTrue(current.getRotorSpeedRpm() >= 6.5 && current.getRotorSpeedRpm() <= 8.5,
-                    "Rotor speed should be within normal bounds: " + current.getRotorSpeedRpm());
-            assertTrue(current.getNacelleTempC() >= 30.0 && current.getNacelleTempC() <= 45.0,
-                    "Nacelle temp should be within normal bounds: " + current.getNacelleTempC());
+            // Bounds check for normal operation as specified in 01-extended-telemetry-model.md
+            assertTrue(current.getPowerOutputMw() >= 11.8 && current.getPowerOutputMw() <= 14.2,
+                    "Power output should be within spec bounds (11.8 - 14.2 MW): " + current.getPowerOutputMw());
+            assertTrue(current.getPitchAngleDeg() >= 3.8 && current.getPitchAngleDeg() <= 5.0,
+                    "Pitch angle should be within spec bounds (3.8 - 5.0°): " + current.getPitchAngleDeg());
+            assertTrue(current.getRotorSpeedRpm() >= 6.8 && current.getRotorSpeedRpm() <= 8.2,
+                    "Rotor speed should be within spec bounds (6.8 - 8.2 RPM): " + current.getRotorSpeedRpm());
+            assertTrue(current.getNacelleTempC() >= 34.0 && current.getNacelleTempC() <= 42.0,
+                    "Nacelle temp should be within spec bounds (34.0 - 42.0°C): " + current.getNacelleTempC());
             assertTrue(current.getVibration() >= 0.05 && current.getVibration() <= 1.0,
                     "Vibration should be within normal bounds: " + current.getVibration());
 

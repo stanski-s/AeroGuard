@@ -18,6 +18,8 @@ import java.util.Map;
 public class GatewayController {
 
     private static final Logger logger = LoggerFactory.getLogger(GatewayController.class);
+    private static final String OPERATING_MODE_TOPIC = "events.status";
+    private static final String TELEMETRY_TOPIC = "telemetry.raw";
 
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
@@ -31,87 +33,67 @@ public class GatewayController {
     public ResponseEntity<Map<String, Object>> updateOperatingMode(
             @PathVariable("assetId") String assetId,
             @RequestParam("mode") String mode) {
-        try {
-            Map<String, Object> event = new HashMap<>();
-            event.put("assetId", assetId);
-            event.put("operatingMode", mode);
-            event.put("timestamp", Instant.now().toString());
-
-            String jsonPayload = objectMapper.writeValueAsString(event);
-            kafkaTemplate.send("events.status", assetId, jsonPayload);
-
-            logger.info("Published AssetOperatingModeEvent to Kafka events.status for asset {}: mode={}", assetId, mode);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("status", "SUCCESS");
-            response.put("assetId", assetId);
-            response.put("operatingMode", mode);
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            logger.error("Failed to publish OperatingMode event for asset {}", assetId, e);
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("status", "ERROR");
-            errorResponse.put("message", e.getMessage());
-            return ResponseEntity.internalServerError().body(errorResponse);
-        }
+        Map<String, Object> event = Map.of(
+                "assetId", assetId,
+                "operatingMode", mode,
+                "timestamp", Instant.now().toString()
+        );
+        Map<String, Object> responseData = Map.of("operatingMode", mode);
+        return publishKafkaEvent(OPERATING_MODE_TOPIC, assetId, event, responseData,
+                String.format("Published AssetOperatingModeEvent for asset %s: mode=%s", assetId, mode));
     }
 
     @PostMapping("/simulator/spike")
     public ResponseEntity<Map<String, Object>> triggerThermalSpike(
             @RequestParam(value = "assetId", defaultValue = "turbine-1") String assetId,
             @RequestParam(value = "temperature", defaultValue = "88.5") double temperature) {
-        try {
-            Map<String, Object> telemetry = new HashMap<>();
-            telemetry.put("assetId", assetId);
-            telemetry.put("sensorId", "temp-" + assetId);
-            telemetry.put("temperature", temperature);
-            telemetry.put("vibration", 0.28);
-            telemetry.put("timestamp", Instant.now().toString());
-
-            String jsonPayload = objectMapper.writeValueAsString(telemetry);
-            kafkaTemplate.send("telemetry.raw", assetId, jsonPayload);
-
-            logger.info("Triggered thermal spike for asset {}: temperature={}°C", assetId, temperature);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("status", "SUCCESS");
-            response.put("assetId", assetId);
-            response.put("temperature", temperature);
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            logger.error("Failed to publish thermal spike for asset {}", assetId, e);
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("status", "ERROR");
-            errorResponse.put("message", e.getMessage());
-            return ResponseEntity.internalServerError().body(errorResponse);
-        }
+        Map<String, Object> telemetry = Map.of(
+                "assetId", assetId,
+                "sensorId", "temp-" + assetId,
+                "temperature", temperature,
+                "vibration", 0.28,
+                "timestamp", Instant.now().toString()
+        );
+        Map<String, Object> responseData = Map.of("temperature", temperature);
+        return publishKafkaEvent(TELEMETRY_TOPIC, assetId, telemetry, responseData,
+                String.format("Triggered thermal spike for asset %s: temperature=%.1f°C", assetId, temperature));
     }
 
     @PostMapping("/assets/{assetId}/action")
     public ResponseEntity<Map<String, Object>> triggerDiagnosticAction(
             @PathVariable("assetId") String assetId,
             @RequestParam("action") String action) {
+        Map<String, Object> event = Map.of(
+                "assetId", assetId,
+                "action", action,
+                "timestamp", Instant.now().toString()
+        );
+        Map<String, Object> responseData = Map.of("action", action);
+        return publishKafkaEvent(OPERATING_MODE_TOPIC, assetId, event, responseData,
+                String.format("Published DiagnosticAction for asset %s: action=%s", assetId, action));
+    }
+
+    private ResponseEntity<Map<String, Object>> publishKafkaEvent(
+            String topic,
+            String assetId,
+            Map<String, Object> payload,
+            Map<String, Object> responseData,
+            String logMessage) {
         try {
-            Map<String, Object> event = new HashMap<>();
-            event.put("assetId", assetId);
-            event.put("action", action);
-            event.put("timestamp", Instant.now().toString());
+            String jsonPayload = objectMapper.writeValueAsString(payload);
+            kafkaTemplate.send(topic, assetId, jsonPayload);
+            logger.info(logMessage);
 
-            String jsonPayload = objectMapper.writeValueAsString(event);
-            kafkaTemplate.send("events.status", assetId, jsonPayload);
-
-            logger.info("Published DiagnosticAction to Kafka events.status for asset {}: action={}", assetId, action);
-
-            Map<String, Object> response = new HashMap<>();
+            Map<String, Object> response = new HashMap<>(responseData);
             response.put("status", "SUCCESS");
             response.put("assetId", assetId);
-            response.put("action", action);
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            logger.error("Failed to publish DiagnosticAction for asset {}", assetId, e);
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("status", "ERROR");
-            errorResponse.put("message", e.getMessage());
+            logger.error("Failed to publish Kafka event to topic {} for asset {}", topic, assetId, e);
+            Map<String, Object> errorResponse = Map.of(
+                    "status", "ERROR",
+                    "message", e.getMessage() != null ? e.getMessage() : "Unknown error"
+            );
             return ResponseEntity.internalServerError().body(errorResponse);
         }
     }
