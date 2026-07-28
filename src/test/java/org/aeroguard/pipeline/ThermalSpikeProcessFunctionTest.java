@@ -3,6 +3,9 @@ package org.aeroguard.pipeline;
 import org.aeroguard.model.Alert;
 import org.aeroguard.model.AssetEvent;
 import org.aeroguard.model.AssetOperatingModeEvent;
+import org.aeroguard.model.ConfigEvent;
+import org.aeroguard.model.DiagnosticAction;
+import org.aeroguard.model.DiagnosticActionRule;
 import org.aeroguard.model.Telemetry;
 import org.aeroguard.model.ThresholdConfig;
 import org.apache.flink.api.common.typeinfo.Types;
@@ -18,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ThermalSpikeProcessFunctionTest {
 
-    private KeyedBroadcastOperatorTestHarness<String, AssetEvent, ThresholdConfig, Alert> testHarness;
+    private KeyedBroadcastOperatorTestHarness<String, AssetEvent, ConfigEvent, Alert> testHarness;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -27,7 +30,8 @@ class ThermalSpikeProcessFunctionTest {
                 processFunction,
                 AssetEvent::getAssetId,
                 Types.STRING,
-                ThermalSpikeProcessFunction.THRESHOLD_STATE_DESCRIPTOR
+                ThermalSpikeProcessFunction.THRESHOLD_STATE_DESCRIPTOR,
+                ThermalSpikeProcessFunction.DIAGNOSTIC_ACTION_STATE_DESCRIPTOR
         );
         testHarness.open();
     }
@@ -87,7 +91,7 @@ class ThermalSpikeProcessFunctionTest {
         assertTrue(testHarness.extractOutputValues().isEmpty());
 
         ThresholdConfig config = new ThresholdConfig("turbine-4", 70.0);
-        testHarness.processBroadcastElement(config, now.plusSeconds(1).toEpochMilli());
+        testHarness.processBroadcastElement(ConfigEvent.fromThreshold(config), now.plusSeconds(1).toEpochMilli());
 
         Telemetry t2 = new Telemetry("turbine-4", "sensor-1", now.plusSeconds(2), 1.0, 75.0);
         testHarness.processElement(AssetEvent.fromTelemetry(t2), now.plusSeconds(2).toEpochMilli());
@@ -105,7 +109,7 @@ class ThermalSpikeProcessFunctionTest {
         Instant now = Instant.ofEpochMilli(1700000000000L);
 
         ThresholdConfig globalConfig = new ThresholdConfig("GLOBAL", 65.0);
-        testHarness.processBroadcastElement(globalConfig, now.toEpochMilli());
+        testHarness.processBroadcastElement(ConfigEvent.fromThreshold(globalConfig), now.toEpochMilli());
 
         Telemetry t1 = new Telemetry("turbine-5", "sensor-1", now.plusSeconds(1), 1.0, 70.0);
         testHarness.processElement(AssetEvent.fromTelemetry(t1), now.plusSeconds(1).toEpochMilli());
@@ -121,8 +125,8 @@ class ThermalSpikeProcessFunctionTest {
     void testSpecificAssetThresholdOverridesGlobalBroadcastThreshold() throws Exception {
         Instant now = Instant.ofEpochMilli(1700000000000L);
 
-        testHarness.processBroadcastElement(new ThresholdConfig("GLOBAL", 60.0), now.toEpochMilli());
-        testHarness.processBroadcastElement(new ThresholdConfig("turbine-6", 80.0), now.plusSeconds(1).toEpochMilli());
+        testHarness.processBroadcastElement(ConfigEvent.fromThreshold(new ThresholdConfig("GLOBAL", 60.0)), now.toEpochMilli());
+        testHarness.processBroadcastElement(ConfigEvent.fromThreshold(new ThresholdConfig("turbine-6", 80.0)), now.plusSeconds(1).toEpochMilli());
 
         Telemetry t1 = new Telemetry("turbine-6", "sensor-1", now.plusSeconds(2), 1.0, 70.0);
         testHarness.processElement(AssetEvent.fromTelemetry(t1), now.plusSeconds(2).toEpochMilli());
@@ -143,7 +147,7 @@ class ThermalSpikeProcessFunctionTest {
         Instant now = Instant.ofEpochMilli(1700000000000L);
 
         ThresholdConfig vibrationConfig = new ThresholdConfig("turbine-8", 50.0, "VIBRATION_SPIKE");
-        testHarness.processBroadcastElement(vibrationConfig, now.toEpochMilli());
+        testHarness.processBroadcastElement(ConfigEvent.fromThreshold(vibrationConfig), now.toEpochMilli());
 
         Telemetry t1 = new Telemetry("turbine-8", "sensor-1", now.plusSeconds(1), 1.0, 70.0);
         testHarness.processElement(AssetEvent.fromTelemetry(t1), now.plusSeconds(1).toEpochMilli());
@@ -156,11 +160,9 @@ class ThermalSpikeProcessFunctionTest {
     void testMaintenanceModeSuppressesThermalSpikeAlerts() throws Exception {
         Instant now = Instant.ofEpochMilli(1700000000000L);
 
-        // Put asset turbine-10 into MAINTENANCE_MODE
         AssetOperatingModeEvent modeEvent = new AssetOperatingModeEvent("turbine-10", "MAINTENANCE_MODE", now);
         testHarness.processElement(AssetEvent.fromOperatingMode(modeEvent), now.toEpochMilli());
 
-        // Send high temperature telemetry (95°C breaching default threshold 80°C)
         Telemetry t1 = new Telemetry("turbine-10", "sensor-1", now.plusSeconds(1), 1.0, 95.0);
         testHarness.processElement(AssetEvent.fromTelemetry(t1), now.plusSeconds(1).toEpochMilli());
 
@@ -172,20 +174,16 @@ class ThermalSpikeProcessFunctionTest {
     void testTransitionFromMaintenanceModeToOnlineResumesAlerts() throws Exception {
         Instant now = Instant.ofEpochMilli(1700000000000L);
 
-        // Set to MAINTENANCE_MODE
         AssetOperatingModeEvent maintenance = new AssetOperatingModeEvent("turbine-11", "MAINTENANCE_MODE", now);
         testHarness.processElement(AssetEvent.fromOperatingMode(maintenance), now.toEpochMilli());
 
-        // High temp telemetry -> suppressed
         Telemetry t1 = new Telemetry("turbine-11", "sensor-1", now.plusSeconds(1), 1.0, 90.0);
         testHarness.processElement(AssetEvent.fromTelemetry(t1), now.plusSeconds(1).toEpochMilli());
         assertTrue(testHarness.extractOutputValues().isEmpty());
 
-        // Set to ONLINE
         AssetOperatingModeEvent online = new AssetOperatingModeEvent("turbine-11", "ONLINE", now.plusSeconds(2));
         testHarness.processElement(AssetEvent.fromOperatingMode(online), now.plusSeconds(2).toEpochMilli());
 
-        // Next high temp telemetry -> alert emitted
         Telemetry t2 = new Telemetry("turbine-11", "sensor-1", now.plusSeconds(3), 1.0, 92.0);
         testHarness.processElement(AssetEvent.fromTelemetry(t2), now.plusSeconds(3).toEpochMilli());
 
@@ -199,20 +197,67 @@ class ThermalSpikeProcessFunctionTest {
     void testMaintenanceModeIsKeyedPerAsset() throws Exception {
         Instant now = Instant.ofEpochMilli(1700000000000L);
 
-        // Set turbine-A to MAINTENANCE_MODE, turbine-B remains ONLINE
         testHarness.processElement(AssetEvent.fromOperatingMode(new AssetOperatingModeEvent("turbine-A", "MAINTENANCE_MODE", now)), now.toEpochMilli());
         testHarness.processElement(AssetEvent.fromOperatingMode(new AssetOperatingModeEvent("turbine-B", "ONLINE", now)), now.toEpochMilli());
 
-        // High temp on turbine-A -> suppressed
         Telemetry tA = new Telemetry("turbine-A", "sensor-1", now.plusSeconds(1), 1.0, 95.0);
         testHarness.processElement(AssetEvent.fromTelemetry(tA), now.plusSeconds(1).toEpochMilli());
 
-        // High temp on turbine-B -> alert emitted
         Telemetry tB = new Telemetry("turbine-B", "sensor-1", now.plusSeconds(2), 1.0, 95.0);
         testHarness.processElement(AssetEvent.fromTelemetry(tB), now.plusSeconds(2).toEpochMilli());
 
         List<Alert> alerts = testHarness.extractOutputValues();
         assertEquals(1, alerts.size());
         assertEquals("turbine-B", alerts.get(0).getAssetId());
+    }
+
+    @Test
+    void testAlertIncludesDiagnosticActionWithFallbackWhenNoRuleRegistered() throws Exception {
+        Instant now = Instant.ofEpochMilli(1700000000000L);
+        Telemetry t1 = new Telemetry("turbine-fallback", "sensor-1", now, 1.0, 95.0);
+
+        testHarness.processElement(AssetEvent.fromTelemetry(t1), now.toEpochMilli());
+
+        List<Alert> alerts = testHarness.extractOutputValues();
+        assertEquals(1, alerts.size());
+        Alert alert = alerts.get(0);
+        assertNotNull(alert.getDiagnosticAction(), "Alert must have enriched diagnostic action");
+        assertTrue(alert.getDiagnosticAction().isFallback());
+        assertEquals("Dispatch Tech Team & Manual Inspection Required", alert.getDiagnosticAction().getTitle());
+    }
+
+    @Test
+    void testBroadcastedDiagnosticActionRuleEnrichesAlert() throws Exception {
+        Instant now = Instant.ofEpochMilli(1700000000000L);
+
+        DiagnosticAction customAction = new DiagnosticAction(
+                "ACT-TEST-99",
+                "Remote Pitch Aerodynamic Calibration",
+                "Execute automatic 15-degree pitch adjustment to reduce rotor temperature.",
+                "CRITICAL",
+                95,
+                "AUTOMATED_SYSTEM"
+        );
+
+        DiagnosticActionRule rule = new DiagnosticActionRule(
+                "RULE-TEST-99",
+                "turbine-custom",
+                "THERMAL_SPIKE",
+                "ONLINE",
+                customAction
+        );
+
+        testHarness.processBroadcastElement(ConfigEvent.fromDiagnosticActionRule(rule), now.toEpochMilli());
+
+        Telemetry t1 = new Telemetry("turbine-custom", "sensor-1", now.plusSeconds(1), 1.0, 95.0);
+        testHarness.processElement(AssetEvent.fromTelemetry(t1), now.plusSeconds(1).toEpochMilli());
+
+        List<Alert> alerts = testHarness.extractOutputValues();
+        assertEquals(1, alerts.size());
+        Alert alert = alerts.get(0);
+        assertNotNull(alert.getDiagnosticAction());
+        assertFalse(alert.getDiagnosticAction().isFallback());
+        assertEquals("ACT-TEST-99", alert.getDiagnosticAction().getActionId());
+        assertEquals("Remote Pitch Aerodynamic Calibration", alert.getDiagnosticAction().getTitle());
     }
 }

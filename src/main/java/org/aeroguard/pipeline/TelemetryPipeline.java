@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.aeroguard.model.Alert;
 import org.aeroguard.model.AssetEvent;
 import org.aeroguard.model.AssetOperatingModeEvent;
+import org.aeroguard.model.ConfigEvent;
+import org.aeroguard.model.DiagnosticActionRule;
 import org.aeroguard.model.Telemetry;
 import org.aeroguard.model.ThresholdConfig;
 import org.aeroguard.util.JsonMapperUtil;
@@ -47,6 +49,7 @@ public class TelemetryPipeline {
     
     private static final String TOPIC = "telemetry.raw";
     private static final String THRESHOLD_TOPIC = "config.thresholds";
+    private static final String DIAGNOSTIC_ACTIONS_TOPIC = "config.diagnostic-actions";
     private static final String OPERATING_MODE_TOPIC = "events.status";
     private static final String ALERT_TOPIC = "alerts.critical";
     private static final String KAFKA_BOOTSTRAP_SERVERS = System.getenv().getOrDefault("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092");
@@ -63,7 +66,7 @@ public class TelemetryPipeline {
         Properties props = new Properties();
         props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA_BOOTSTRAP_SERVERS);
         try (AdminClient adminClient = AdminClient.create(props)) {
-            List<String> requiredTopics = List.of(TOPIC, THRESHOLD_TOPIC, OPERATING_MODE_TOPIC, ALERT_TOPIC);
+            List<String> requiredTopics = List.of(TOPIC, THRESHOLD_TOPIC, DIAGNOSTIC_ACTIONS_TOPIC, OPERATING_MODE_TOPIC, ALERT_TOPIC);
             Set<String> existingTopics = adminClient.listTopics().names().get();
             List<NewTopic> newTopics = requiredTopics.stream()
                     .filter(t -> !existingTopics.contains(t))
@@ -130,9 +133,25 @@ public class TelemetryPipeline {
                 .setValueOnlyDeserializer(new SimpleStringSchema())
                 .build();
 
-        DataStream<ThresholdConfig> thresholdStream = env
+        DataStream<ConfigEvent> thresholdStream = env
                 .fromSource(thresholdSource, WatermarkStrategy.noWatermarks(), "Kafka Threshold Source")
-                .map(new ThresholdDeserializer());
+                .map(new ThresholdDeserializer())
+                .map(ConfigEvent::fromThreshold);
+
+        KafkaSource<String> diagnosticActionSource = KafkaSource.<String>builder()
+                .setBootstrapServers(KAFKA_BOOTSTRAP_SERVERS)
+                .setTopics(DIAGNOSTIC_ACTIONS_TOPIC)
+                .setGroupId("diagnostic-action-pipeline-group")
+                .setStartingOffsets(OffsetsInitializer.earliest())
+                .setValueOnlyDeserializer(new SimpleStringSchema())
+                .build();
+
+        DataStream<ConfigEvent> diagnosticActionStream = env
+                .fromSource(diagnosticActionSource, WatermarkStrategy.noWatermarks(), "Kafka Diagnostic Actions Source")
+                .map(new DiagnosticActionRuleDeserializer())
+                .map(ConfigEvent::fromDiagnosticActionRule);
+
+        DataStream<ConfigEvent> configStream = thresholdStream.union(diagnosticActionStream);
 
         KafkaSource<String> operatingModeSource = KafkaSource.<String>builder()
                 .setBootstrapServers(KAFKA_BOOTSTRAP_SERVERS)
@@ -151,8 +170,11 @@ public class TelemetryPipeline {
                                         event.getTimestamp() != null ? event.getTimestamp().toEpochMilli() : System.currentTimeMillis())
                 );
 
-        BroadcastStream<ThresholdConfig> broadcastThresholds = thresholdStream
-                .broadcast(ThermalSpikeProcessFunction.THRESHOLD_STATE_DESCRIPTOR);
+        BroadcastStream<ConfigEvent> broadcastConfig = configStream
+                .broadcast(
+                        ThermalSpikeProcessFunction.THRESHOLD_STATE_DESCRIPTOR,
+                        ThermalSpikeProcessFunction.DIAGNOSTIC_ACTION_STATE_DESCRIPTOR
+                );
 
         DataStream<AssetMetric> aggregatedStream = telemetryStream
                 .keyBy(Telemetry::getAssetId)
@@ -191,7 +213,7 @@ public class TelemetryPipeline {
 
         DataStream<Alert> alertStream = combinedAssetStream
                 .keyBy(AssetEvent::getAssetId)
-                .connect(broadcastThresholds)
+                .connect(broadcastConfig)
                 .process(new ThermalSpikeProcessFunction(80.0));
 
         KafkaSink<String> alertKafkaSink = KafkaSink.<String>builder()
@@ -236,6 +258,20 @@ public class TelemetryPipeline {
         @Override
         public ThresholdConfig map(String json) throws Exception {
             return mapper.readValue(json, ThresholdConfig.class);
+        }
+    }
+
+    public static class DiagnosticActionRuleDeserializer extends RichMapFunction<String, DiagnosticActionRule> {
+        private transient ObjectMapper mapper;
+
+        @Override
+        public void open(Configuration parameters) throws Exception {
+            mapper = JsonMapperUtil.getMapper();
+        }
+
+        @Override
+        public DiagnosticActionRule map(String json) throws Exception {
+            return mapper.readValue(json, DiagnosticActionRule.class);
         }
     }
 

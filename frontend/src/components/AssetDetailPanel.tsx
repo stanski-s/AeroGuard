@@ -10,10 +10,8 @@ import {
   RotateCw,
   Send,
   X,
-  WifiOff,
+  ShieldAlert,
 } from "lucide-react";
-import { getAssetOperatingStatus } from "@/utils/assetHelpers";
-import { DiagnosticAction } from "@/types/telemetry";
 
 export function AssetDetailPanel() {
   const selectedAssetId = useTelemetryStore((state) => state.selectedAssetId);
@@ -29,7 +27,7 @@ export function AssetDetailPanel() {
   const selectedAsset = assets.find((a) => a.id === selectedAssetId);
   if (!selectedAsset) return null;
 
-  const hasAlert = alerts.some((a) => a.asset_id === selectedAsset.id);
+  const activeAlert = alerts.find((a) => a.asset_id === selectedAsset.id);
   const assetHistory = telemetryHistory[selectedAsset.id] || [];
   const latestPoint = assetHistory[assetHistory.length - 1];
   const hasData = Boolean(latestPoint);
@@ -42,39 +40,38 @@ export function AssetDetailPanel() {
   const vibrationVal = latestPoint?.vibration;
   const vibrationPct = vibrationVal !== undefined ? Math.min(100, Math.round((vibrationVal / 0.50) * 100)) : 0;
 
-  // AI Recommendation Logic Engine based on real telemetry
-  let aiDiagnosis = "All subsystems operate within nominal tolerances.";
-  let aiConfidence = "98%";
-  let aiSeverity: "NOMINAL" | "WARNING" | "CRITICAL" = "NOMINAL";
-  let recommendedAction: DiagnosticAction = "RECALIBRATE_PITCH";
+  // Rule-based Diagnostic Engine resolution
+  let diagnosisTitle = "Subsystems operating within nominal dynamic thresholds.";
+  let diagnosisDetail = "No action required. Continuous telemetry stream active.";
+  let priorityLabel = "Nominal";
 
   if (!hasData) {
-    aiSeverity = "WARNING";
-    aiDiagnosis = isConnected
-      ? "Waiting for incoming telemetry stream frame from Kafka."
-      : "WebSocket Gateway disconnected. No telemetry data received.";
-    aiConfidence = "0%";
-  } else if (hasAlert || (nacelleTempC && nacelleTempC > 80)) {
-    aiSeverity = "CRITICAL";
-    aiDiagnosis = "Thermal Spike detected in Generator Stator (Cooling Failure / Lubrication Degradation).";
-    aiConfidence = "94%";
-    recommendedAction = "DERATE_POWER";
+    diagnosisTitle = isConnected
+      ? "Awaiting incoming telemetry stream frame from Kafka."
+      : "WebSocket Gateway disconnected. Telemetry stream offline.";
+    priorityLabel = "Offline";
+  } else if (activeAlert?.diagnostic_action) {
+    diagnosisTitle = `Action: ${activeAlert.diagnostic_action.title}`;
+    diagnosisDetail = activeAlert.diagnostic_action.description;
+    priorityLabel = `Priority ${activeAlert.diagnostic_action.priority}`;
+  } else if (activeAlert) {
+    diagnosisTitle = "Thermal Spike Anomaly Detected";
+    diagnosisDetail = "Emergency remediation recommended. Select a diagnostic action below.";
+    priorityLabel = "Critical";
   } else if (vibrationPct > 70) {
-    aiSeverity = "WARNING";
-    aiDiagnosis = "Elevated Mechanical Vibration (Drive Train Misalignment or Bearing Wear).";
-    aiConfidence = "88%";
-    recommendedAction = "LOCK_BRAKES";
+    diagnosisTitle = "Elevated Mechanical Vibration Detected";
+    diagnosisDetail = "Drive train vibration threshold exceeded. Check mechanical alignment.";
+    priorityLabel = "Warning";
   } else if (selectedAsset.operatingMode === "MAINTENANCE_MODE") {
-    aiSeverity = "WARNING";
-    aiDiagnosis = "Asset in Maintenance Mode. Anomaly alerts are suppressed.";
-    aiConfidence = "100%";
-    recommendedAction = "DISPATCH_TECH";
+    diagnosisTitle = "Asset in Maintenance Mode";
+    diagnosisDetail = "Testing operations active. Telemetry alerts suppressed.";
+    priorityLabel = "Maintenance";
   }
 
-  const handleActionClick = async (action: DiagnosticAction) => {
-    setLastActionStatus(`Sending ${action}...`);
-    await triggerDiagnosticAction(selectedAsset.id, action);
-    setLastActionStatus(`Command [${action}] sent successfully to ${selectedAsset.id}`);
+  const handleActionClick = async (action: string) => {
+    setLastActionStatus(`Executing ${action}...`);
+    await triggerDiagnosticAction(selectedAsset.id, action as any);
+    setLastActionStatus(`Command [${action}] dispatched to ${selectedAsset.id}`);
     setTimeout(() => setLastActionStatus(null), 4000);
   };
 
@@ -152,20 +149,23 @@ export function AssetDetailPanel() {
         </div>
       </div>
 
-      {/* AI Decision Support Box */}
+      {/* Deterministic Diagnostic Decision Engine Box */}
       <div className="mx-4 mb-4 p-3 bg-[#e6eeff] border border-[#305ea0]/30 rounded-lg">
         <div className="flex items-center justify-between pb-1.5 border-b border-[#305ea0]/20 mb-2">
           <div className="flex items-center gap-1.5 font-bold text-xs text-[#002a58]">
-            <Cpu className="h-4 w-4 text-[#004080]" />
-            <span>AI Decision Support</span>
+            <ShieldAlert className="h-4 w-4 text-[#ba1a1a]" />
+            <span>Diagnostic Decision Engine</span>
           </div>
           <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-[#004080] text-white font-bold">
-            {aiConfidence} Confidence
+            {priorityLabel}
           </span>
         </div>
 
-        <p className="text-[11px] text-[#0d1c2e] leading-snug mb-3">
-          {aiDiagnosis}
+        <p className="font-bold text-[11px] text-[#002a58]">
+          {diagnosisTitle}
+        </p>
+        <p className="text-[11px] text-[#424750] leading-snug mb-3 mt-0.5">
+          {diagnosisDetail}
         </p>
 
         {/* Diagnostic Action Triggers */}

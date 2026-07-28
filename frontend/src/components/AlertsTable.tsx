@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useTelemetryStore } from "@/store/useTelemetryStore";
-import { Shield, Trash2, AlertOctagon, Flame } from "lucide-react";
+import { Shield, Trash2, AlertOctagon, Flame, ShieldAlert } from "lucide-react";
 import { formatTemperature, formatTimestamp } from "@/utils/formatters";
 
 export function AlertsTable() {
@@ -51,8 +51,8 @@ export function AlertsTable() {
                 <th className="px-6 py-3">Asset ID</th>
                 <th className="px-6 py-3">Sensor ID</th>
                 <th className="px-6 py-3">Alert Type</th>
-                <th className="px-6 py-3">Temperature</th>
-                <th className="px-6 py-3">Threshold</th>
+                <th className="px-6 py-3">Temp / Thresh</th>
+                <th className="px-6 py-3">Diagnostic Action</th>
                 <th className="px-6 py-3">Timestamp</th>
                 <th className="px-6 py-3 text-right">Action</th>
               </tr>
@@ -64,7 +64,7 @@ export function AlertsTable() {
                   onClick={() => setSelectedAssetId(alert.asset_id)}
                   className="hover:bg-[#eff4ff] cursor-pointer transition-colors"
                 >
-                  <td className="px-6 py-3 font-semibold text-[#424750] truncate max-w-[140px]">
+                  <td className="px-6 py-3 font-semibold text-[#424750] truncate max-w-[120px]">
                     {alert.alert_id}
                   </td>
                   <td className="px-6 py-3 font-bold text-[#002a58]">
@@ -80,10 +80,17 @@ export function AlertsTable() {
                     </span>
                   </td>
                   <td className="px-6 py-3 text-[#ba1a1a] font-bold">
-                    {formatTemperature(alert.temperature)}
+                    {formatTemperature(alert.temperature)} / <span className="text-[#737781] font-normal">{formatTemperature(alert.threshold)}</span>
                   </td>
-                  <td className="px-6 py-3 text-[#424750]">
-                    {formatTemperature(alert.threshold)}
+                  <td className="px-6 py-3">
+                    {alert.diagnostic_action ? (
+                      <span className="px-2 py-1 rounded bg-[#fff8f6] text-[#904d00] border border-[#ffdcbe] font-medium flex items-center gap-1.5 w-fit text-[11px]">
+                        <ShieldAlert className="h-3.5 w-3.5 text-[#904d00] shrink-0" />
+                        {alert.diagnostic_action.title}
+                      </span>
+                    ) : (
+                      <span className="text-[#737781] italic">Standard Procedure</span>
+                    )}
                   </td>
                   <td className="px-6 py-3 text-[#424750]">
                     {formatTimestamp(alert.timestamp)}

@@ -2,7 +2,7 @@
 
 import React from "react";
 import { CriticalAlert } from "@/types/alert";
-import { AlertTriangle, X, Thermometer } from "lucide-react";
+import { AlertTriangle, X, Thermometer, ShieldAlert } from "lucide-react";
 import { formatTemperature, formatTimestamp } from "@/utils/formatters";
 
 interface AlertToastProps {
@@ -11,6 +11,8 @@ interface AlertToastProps {
 }
 
 export const AlertToast: React.FC<AlertToastProps> = ({ alert, onDismiss }) => {
+  const action = alert.diagnostic_action;
+
   return (
     <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-rose-950/80 via-slate-900/90 to-slate-950/90 border border-rose-500/40 p-4 shadow-2xl backdrop-blur-md transition-all duration-300 hover:border-rose-400 transform animate-slide-in">
       {/* Flashing glow accent */}
@@ -44,6 +46,24 @@ export const AlertToast: React.FC<AlertToastProps> = ({ alert, onDismiss }) => {
           <X className="h-4 w-4" />
         </button>
       </div>
+
+      {/* Enriched Diagnostic Action Banner */}
+      {action && (
+        <div className="mt-3 mx-2 rounded-lg bg-amber-500/10 border border-amber-500/30 p-2.5 text-xs text-amber-200">
+          <div className="flex items-center gap-2 font-semibold text-amber-300">
+            <ShieldAlert className="h-4 w-4 shrink-0 text-amber-400" />
+            <span>Action: {action.title}</span>
+            {action.is_fallback && (
+              <span className="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">
+                Fallback
+              </span>
+            )}
+          </div>
+          <p className="mt-1 text-[11px] text-amber-200/80 leading-relaxed">
+            {action.description}
+          </p>
+        </div>
+      )}
 
       <div className="mt-3 flex items-center justify-between border-t border-slate-800/80 pt-2.5 pl-2 text-xs text-slate-300">
         <div className="flex items-center gap-1.5 font-mono">

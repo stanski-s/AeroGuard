@@ -29,9 +29,16 @@ public class Alert {
     @JsonProperty("message")
     private String message;
 
+    @JsonProperty("diagnostic_action")
+    private DiagnosticAction diagnosticAction;
+
     public Alert() {}
 
     public Alert(String alertId, String assetId, String sensorId, String alertType, double temperature, double threshold, Instant timestamp, String message) {
+        this(alertId, assetId, sensorId, alertType, temperature, threshold, timestamp, message, null);
+    }
+
+    public Alert(String alertId, String assetId, String sensorId, String alertType, double temperature, double threshold, Instant timestamp, String message, DiagnosticAction diagnosticAction) {
         this.alertId = alertId;
         this.assetId = assetId;
         this.sensorId = sensorId;
@@ -40,6 +47,7 @@ public class Alert {
         this.threshold = threshold;
         this.timestamp = timestamp;
         this.message = message;
+        this.diagnosticAction = diagnosticAction;
     }
 
     public String getAlertId() {
@@ -104,6 +112,14 @@ public class Alert {
 
     public void setMessage(String message) {
         this.message = message;
+    }
+
+    public DiagnosticAction getDiagnosticAction() {
+        return diagnosticAction;
+    }
+
+    public void setDiagnosticAction(DiagnosticAction diagnosticAction) {
+        this.diagnosticAction = diagnosticAction;
     }
 
     @Override
