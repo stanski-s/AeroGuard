@@ -45,7 +45,6 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
       // Automatically sync telemetry history with alert's spike point to prevent graph/alert mismatch
       const spikePoint: TelemetryPoint = {
         asset_id: alert.asset_id,
-        sensor_id: alert.sensor_id || `temp-${alert.asset_id}`,
         temperature: alert.temperature,
         vibration: 0.28,
         powerOutputMw: 12.4,

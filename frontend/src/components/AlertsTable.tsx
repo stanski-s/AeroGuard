@@ -49,7 +49,6 @@ export function AlertsTable() {
               <tr>
                 <th className="px-6 py-3">Alert ID</th>
                 <th className="px-6 py-3">Asset ID</th>
-                <th className="px-6 py-3">Sensor ID</th>
                 <th className="px-6 py-3">Alert Type</th>
                 <th className="px-6 py-3">Temp / Thresh</th>
                 <th className="px-6 py-3">Diagnostic Action</th>
@@ -69,9 +68,6 @@ export function AlertsTable() {
                   </td>
                   <td className="px-6 py-3 font-bold text-[#002a58]">
                     {alert.asset_id}
-                  </td>
-                  <td className="px-6 py-3 text-[#424750]">
-                    {alert.sensor_id}
                   </td>
                   <td className="px-6 py-3">
                     <span className="px-2 py-0.5 rounded bg-[#ffdad6] text-[#ba1a1a] border border-[#ba1a1a]/30 font-bold flex items-center gap-1 w-fit">

@@ -33,7 +33,6 @@ class AlertSerializerTest {
         Alert alert = new Alert(
                 "ALERT-12345",
                 "turbine-501",
-                "temp-sensor-1",
                 "THERMAL_SPIKE",
                 92.5,
                 80.0,
@@ -59,7 +58,6 @@ class AlertSerializerTest {
         Alert alert = new Alert(
                 "ALERT-67890",
                 "turbine-502",
-                "temp-sensor-2",
                 "THERMAL_SPIKE",
                 88.0,
                 80.0,

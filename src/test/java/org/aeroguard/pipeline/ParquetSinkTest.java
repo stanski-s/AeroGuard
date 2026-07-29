@@ -25,7 +25,6 @@ class ParquetSinkTest {
         Schema schema = ReflectData.get().getSchema(TelemetryRecord.class);
         assertNotNull(schema);
         assertNotNull(schema.getField("assetId"));
-        assertNotNull(schema.getField("sensorId"));
         assertNotNull(schema.getField("timestamp"));
         assertEquals(Schema.Type.LONG, schema.getField("timestamp").schema().getType());
         assertNotNull(schema.getField("vibration"));
@@ -35,11 +34,10 @@ class ParquetSinkTest {
     @Test
     void testTelemetryRecordConversion() {
         Instant now = Instant.parse("2026-07-23T20:00:00Z");
-        Telemetry telemetry = new Telemetry("asset-01", "sensor-01", now, 0.042, 78.5);
+        Telemetry telemetry = new Telemetry("asset-01", now, 0.042, 78.5);
         TelemetryRecord record = TelemetryRecord.fromTelemetry(telemetry);
 
         assertEquals("asset-01", record.getAssetId());
-        assertEquals("sensor-01", record.getSensorId());
         assertEquals(now.toEpochMilli(), record.getTimestamp());
         assertEquals(0.042, record.getVibration(), 0.0001);
         assertEquals(78.5, record.getTemperature(), 0.0001);
@@ -54,7 +52,7 @@ class ParquetSinkTest {
         org.apache.flink.core.fs.FSDataOutputStream outputStream = flinkPath.getFileSystem().create(flinkPath, org.apache.flink.core.fs.FileSystem.WriteMode.OVERWRITE);
 
         BulkWriter<TelemetryRecord> writer = writerFactory.create(outputStream);
-        Telemetry telemetry = new Telemetry("asset-01", "sensor-01", Instant.now(), 0.05, 75.5);
+        Telemetry telemetry = new Telemetry("asset-01", Instant.now(), 0.05, 75.5);
         writer.addElement(TelemetryRecord.fromTelemetry(telemetry));
         writer.flush();
         writer.finish();

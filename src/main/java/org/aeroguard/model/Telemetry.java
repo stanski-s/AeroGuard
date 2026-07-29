@@ -12,10 +12,6 @@ public class Telemetry {
     @JsonAlias({"assetId", "asset_id"})
     private String assetId;
 
-    @JsonProperty("sensor_id")
-    @JsonAlias({"sensorId", "sensor_id"})
-    private String sensorId;
-
     @JsonProperty("timestamp")
     private Instant timestamp;
 
@@ -43,14 +39,13 @@ public class Telemetry {
 
     public Telemetry() {}
 
-    public Telemetry(String assetId, String sensorId, Instant timestamp, double vibration, double temperature) {
-        this(assetId, sensorId, timestamp, vibration, temperature, 12.5, 4.2, 7.2, 38.5);
+    public Telemetry(String assetId, Instant timestamp, double vibration, double temperature) {
+        this(assetId, timestamp, vibration, temperature, 12.5, 4.2, 7.2, 38.5);
     }
 
-    public Telemetry(String assetId, String sensorId, Instant timestamp, double vibration, double temperature,
+    public Telemetry(String assetId, Instant timestamp, double vibration, double temperature,
                      double powerOutputMw, double pitchAngleDeg, double rotorSpeedRpm, double nacelleTempC) {
         this.assetId = assetId;
-        this.sensorId = sensorId;
         this.timestamp = timestamp;
         this.vibration = vibration;
         this.temperature = temperature;
@@ -66,14 +61,6 @@ public class Telemetry {
 
     public void setAssetId(String assetId) {
         this.assetId = assetId;
-    }
-
-    public String getSensorId() {
-        return sensorId;
-    }
-
-    public void setSensorId(String sensorId) {
-        this.sensorId = sensorId;
     }
 
     public Instant getTimestamp() {
@@ -136,7 +123,6 @@ public class Telemetry {
     public String toString() {
         return "Telemetry{" +
                 "assetId='" + assetId + '\'' +
-                ", sensorId='" + sensorId + '\'' +
                 ", timestamp=" + timestamp +
                 ", vibration=" + vibration +
                 ", temperature=" + temperature +

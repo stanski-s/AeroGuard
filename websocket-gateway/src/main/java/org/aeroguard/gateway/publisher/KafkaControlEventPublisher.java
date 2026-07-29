@@ -62,7 +62,6 @@ public class KafkaControlEventPublisher implements ControlEventPublisher {
     public void publishThermalSpike(String assetId, double temperature) {
         Map<String, Object> telemetry = Map.of(
                 "assetId", assetId,
-                "sensorId", "temp-" + assetId,
                 "temperature", temperature,
                 "vibration", 0.28,
                 "timestamp", Instant.now().toString()

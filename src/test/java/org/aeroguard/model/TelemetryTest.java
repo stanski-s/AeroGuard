@@ -23,7 +23,6 @@ class TelemetryTest {
     void testTelemetryGettersAndSetters() {
         Telemetry telemetry = new Telemetry();
         telemetry.setAssetId("turbine-1");
-        telemetry.setSensorId("sensor-1");
         Instant now = Instant.now();
         telemetry.setTimestamp(now);
         telemetry.setVibration(0.15);
@@ -34,7 +33,6 @@ class TelemetryTest {
         telemetry.setNacelleTempC(37.8);
 
         assertEquals("turbine-1", telemetry.getAssetId());
-        assertEquals("sensor-1", telemetry.getSensorId());
         assertEquals(now, telemetry.getTimestamp());
         assertEquals(0.15, telemetry.getVibration(), 0.0001);
         assertEquals(65.0, telemetry.getTemperature(), 0.0001);
@@ -48,7 +46,7 @@ class TelemetryTest {
     void testJacksonSerializationAndDeserialization() throws Exception {
         Instant timestamp = Instant.parse("2026-07-28T12:00:00Z");
         Telemetry telemetry = new Telemetry(
-                "turbine-5", "sensor-5", timestamp, 0.22, 71.0,
+                "turbine-5", timestamp, 0.22, 71.0,
                 14.0, 4.9, 8.1, 41.2
         );
 
@@ -62,7 +60,6 @@ class TelemetryTest {
 
         Telemetry deserialized = objectMapper.readValue(json, Telemetry.class);
         assertEquals("turbine-5", deserialized.getAssetId());
-        assertEquals("sensor-5", deserialized.getSensorId());
         assertEquals(timestamp, deserialized.getTimestamp());
         assertEquals(14.0, deserialized.getPowerOutputMw(), 0.0001);
         assertEquals(4.9, deserialized.getPitchAngleDeg(), 0.0001);

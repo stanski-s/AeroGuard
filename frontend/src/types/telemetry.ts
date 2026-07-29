@@ -1,6 +1,5 @@
 export interface TelemetryPoint {
   asset_id: string;
-  sensor_id: string;
   temperature: number;
   vibration: number;
   powerOutputMw?: number;

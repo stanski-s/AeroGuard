@@ -39,8 +39,8 @@ class ThermalSpikeProcessFunctionTest {
     @Test
     void testNormalTemperaturesDoNotTriggerAlert() throws Exception {
         Instant now = Instant.ofEpochMilli(1700000000000L);
-        Telemetry t1 = new Telemetry("turbine-1", "sensor-1", now, 1.2, 50.0);
-        Telemetry t2 = new Telemetry("turbine-1", "sensor-1", now.plusSeconds(1), 1.3, 60.0);
+        Telemetry t1 = new Telemetry("turbine-1", now, 1.2, 50.0);
+        Telemetry t2 = new Telemetry("turbine-1", now.plusSeconds(1), 1.3, 60.0);
 
         testHarness.processElement(AssetEvent.fromTelemetry(t1), now.toEpochMilli());
         testHarness.processElement(AssetEvent.fromTelemetry(t2), now.plusSeconds(1).toEpochMilli());
@@ -52,8 +52,8 @@ class ThermalSpikeProcessFunctionTest {
     @Test
     void testThermalSpikeTriggersDeterministicAlert() throws Exception {
         Instant now = Instant.ofEpochMilli(1700000000000L);
-        Telemetry t1 = new Telemetry("turbine-2", "sensor-2", now, 1.0, 85.0);
-        Telemetry t2 = new Telemetry("turbine-2", "sensor-2", now.plusSeconds(1), 1.1, 95.0);
+        Telemetry t1 = new Telemetry("turbine-2", now, 1.0, 85.0);
+        Telemetry t2 = new Telemetry("turbine-2", now.plusSeconds(1), 1.1, 95.0);
 
         testHarness.processElement(AssetEvent.fromTelemetry(t1), now.toEpochMilli());
         testHarness.processElement(AssetEvent.fromTelemetry(t2), now.plusSeconds(1).toEpochMilli());
@@ -63,7 +63,6 @@ class ThermalSpikeProcessFunctionTest {
 
         Alert alert1 = alerts.get(0);
         assertEquals("turbine-2", alert1.getAssetId());
-        assertEquals("sensor-2", alert1.getSensorId());
         assertEquals("THERMAL_SPIKE", alert1.getAlertType());
         assertEquals(85.0, alert1.getTemperature());
         assertEquals(80.0, alert1.getThreshold());
@@ -73,27 +72,17 @@ class ThermalSpikeProcessFunctionTest {
     }
 
     @Test
-    void testVibrationSensorIgnoredForThermalSpike() throws Exception {
-        Instant now = Instant.ofEpochMilli(1700000000000L);
-        Telemetry t1 = new Telemetry("turbine-3", "vibration-sensor-1", now, 5.0, 95.0);
-        testHarness.processElement(AssetEvent.fromTelemetry(t1), now.toEpochMilli());
-
-        List<Alert> alerts = testHarness.extractOutputValues();
-        assertTrue(alerts.isEmpty(), "Vibration sensors should not trigger thermal spike alerts");
-    }
-
-    @Test
     void testDynamicThresholdBroadcastUpdatesAlertLimitImmediately() throws Exception {
         Instant now = Instant.ofEpochMilli(1700000000000L);
 
-        Telemetry t1 = new Telemetry("turbine-4", "sensor-1", now, 1.0, 75.0);
+        Telemetry t1 = new Telemetry("turbine-4", now, 1.0, 75.0);
         testHarness.processElement(AssetEvent.fromTelemetry(t1), now.toEpochMilli());
         assertTrue(testHarness.extractOutputValues().isEmpty());
 
         ThresholdConfig config = new ThresholdConfig("turbine-4", 70.0);
         testHarness.processBroadcastElement(ConfigEvent.fromThreshold(config), now.plusSeconds(1).toEpochMilli());
 
-        Telemetry t2 = new Telemetry("turbine-4", "sensor-1", now.plusSeconds(2), 1.0, 75.0);
+        Telemetry t2 = new Telemetry("turbine-4", now.plusSeconds(2), 1.0, 75.0);
         testHarness.processElement(AssetEvent.fromTelemetry(t2), now.plusSeconds(2).toEpochMilli());
 
         List<Alert> alerts = testHarness.extractOutputValues();
@@ -111,7 +100,7 @@ class ThermalSpikeProcessFunctionTest {
         ThresholdConfig globalConfig = new ThresholdConfig("GLOBAL", 65.0);
         testHarness.processBroadcastElement(ConfigEvent.fromThreshold(globalConfig), now.toEpochMilli());
 
-        Telemetry t1 = new Telemetry("turbine-5", "sensor-1", now.plusSeconds(1), 1.0, 70.0);
+        Telemetry t1 = new Telemetry("turbine-5", now.plusSeconds(1), 1.0, 70.0);
         testHarness.processElement(AssetEvent.fromTelemetry(t1), now.plusSeconds(1).toEpochMilli());
 
         List<Alert> alerts = testHarness.extractOutputValues();
@@ -128,12 +117,12 @@ class ThermalSpikeProcessFunctionTest {
         testHarness.processBroadcastElement(ConfigEvent.fromThreshold(new ThresholdConfig("GLOBAL", 60.0)), now.toEpochMilli());
         testHarness.processBroadcastElement(ConfigEvent.fromThreshold(new ThresholdConfig("turbine-6", 80.0)), now.plusSeconds(1).toEpochMilli());
 
-        Telemetry t1 = new Telemetry("turbine-6", "sensor-1", now.plusSeconds(2), 1.0, 70.0);
+        Telemetry t1 = new Telemetry("turbine-6", now.plusSeconds(2), 1.0, 70.0);
         testHarness.processElement(AssetEvent.fromTelemetry(t1), now.plusSeconds(2).toEpochMilli());
 
         assertTrue(testHarness.extractOutputValues().isEmpty());
 
-        Telemetry t2 = new Telemetry("turbine-7", "sensor-1", now.plusSeconds(3), 1.0, 70.0);
+        Telemetry t2 = new Telemetry("turbine-7", now.plusSeconds(3), 1.0, 70.0);
         testHarness.processElement(AssetEvent.fromTelemetry(t2), now.plusSeconds(3).toEpochMilli());
 
         List<Alert> alerts = testHarness.extractOutputValues();
@@ -149,7 +138,7 @@ class ThermalSpikeProcessFunctionTest {
         ThresholdConfig vibrationConfig = new ThresholdConfig("turbine-8", 50.0, "VIBRATION_SPIKE");
         testHarness.processBroadcastElement(ConfigEvent.fromThreshold(vibrationConfig), now.toEpochMilli());
 
-        Telemetry t1 = new Telemetry("turbine-8", "sensor-1", now.plusSeconds(1), 1.0, 70.0);
+        Telemetry t1 = new Telemetry("turbine-8", now.plusSeconds(1), 1.0, 70.0);
         testHarness.processElement(AssetEvent.fromTelemetry(t1), now.plusSeconds(1).toEpochMilli());
 
         List<Alert> alerts = testHarness.extractOutputValues();
@@ -163,7 +152,7 @@ class ThermalSpikeProcessFunctionTest {
         AssetOperatingModeEvent modeEvent = new AssetOperatingModeEvent("turbine-10", "MAINTENANCE_MODE", now);
         testHarness.processElement(AssetEvent.fromOperatingMode(modeEvent), now.toEpochMilli());
 
-        Telemetry t1 = new Telemetry("turbine-10", "sensor-1", now.plusSeconds(1), 1.0, 95.0);
+        Telemetry t1 = new Telemetry("turbine-10", now.plusSeconds(1), 1.0, 95.0);
         testHarness.processElement(AssetEvent.fromTelemetry(t1), now.plusSeconds(1).toEpochMilli());
 
         List<Alert> alerts = testHarness.extractOutputValues();
@@ -177,14 +166,14 @@ class ThermalSpikeProcessFunctionTest {
         AssetOperatingModeEvent maintenance = new AssetOperatingModeEvent("turbine-11", "MAINTENANCE_MODE", now);
         testHarness.processElement(AssetEvent.fromOperatingMode(maintenance), now.toEpochMilli());
 
-        Telemetry t1 = new Telemetry("turbine-11", "sensor-1", now.plusSeconds(1), 1.0, 90.0);
+        Telemetry t1 = new Telemetry("turbine-11", now.plusSeconds(1), 1.0, 90.0);
         testHarness.processElement(AssetEvent.fromTelemetry(t1), now.plusSeconds(1).toEpochMilli());
         assertTrue(testHarness.extractOutputValues().isEmpty());
 
         AssetOperatingModeEvent online = new AssetOperatingModeEvent("turbine-11", "ONLINE", now.plusSeconds(2));
         testHarness.processElement(AssetEvent.fromOperatingMode(online), now.plusSeconds(2).toEpochMilli());
 
-        Telemetry t2 = new Telemetry("turbine-11", "sensor-1", now.plusSeconds(3), 1.0, 92.0);
+        Telemetry t2 = new Telemetry("turbine-11", now.plusSeconds(3), 1.0, 92.0);
         testHarness.processElement(AssetEvent.fromTelemetry(t2), now.plusSeconds(3).toEpochMilli());
 
         List<Alert> alerts = testHarness.extractOutputValues();
@@ -200,10 +189,10 @@ class ThermalSpikeProcessFunctionTest {
         testHarness.processElement(AssetEvent.fromOperatingMode(new AssetOperatingModeEvent("turbine-A", "MAINTENANCE_MODE", now)), now.toEpochMilli());
         testHarness.processElement(AssetEvent.fromOperatingMode(new AssetOperatingModeEvent("turbine-B", "ONLINE", now)), now.toEpochMilli());
 
-        Telemetry tA = new Telemetry("turbine-A", "sensor-1", now.plusSeconds(1), 1.0, 95.0);
+        Telemetry tA = new Telemetry("turbine-A", now.plusSeconds(1), 1.0, 95.0);
         testHarness.processElement(AssetEvent.fromTelemetry(tA), now.plusSeconds(1).toEpochMilli());
 
-        Telemetry tB = new Telemetry("turbine-B", "sensor-1", now.plusSeconds(2), 1.0, 95.0);
+        Telemetry tB = new Telemetry("turbine-B", now.plusSeconds(2), 1.0, 95.0);
         testHarness.processElement(AssetEvent.fromTelemetry(tB), now.plusSeconds(2).toEpochMilli());
 
         List<Alert> alerts = testHarness.extractOutputValues();
@@ -214,7 +203,7 @@ class ThermalSpikeProcessFunctionTest {
     @Test
     void testAlertIncludesDiagnosticActionWithFallbackWhenNoRuleRegistered() throws Exception {
         Instant now = Instant.ofEpochMilli(1700000000000L);
-        Telemetry t1 = new Telemetry("turbine-fallback", "sensor-1", now, 1.0, 95.0);
+        Telemetry t1 = new Telemetry("turbine-fallback", now, 1.0, 95.0);
 
         testHarness.processElement(AssetEvent.fromTelemetry(t1), now.toEpochMilli());
 
@@ -249,7 +238,7 @@ class ThermalSpikeProcessFunctionTest {
 
         testHarness.processBroadcastElement(ConfigEvent.fromDiagnosticActionRule(rule), now.toEpochMilli());
 
-        Telemetry t1 = new Telemetry("turbine-custom", "sensor-1", now.plusSeconds(1), 1.0, 95.0);
+        Telemetry t1 = new Telemetry("turbine-custom", now.plusSeconds(1), 1.0, 95.0);
         testHarness.processElement(AssetEvent.fromTelemetry(t1), now.plusSeconds(1).toEpochMilli());
 
         List<Alert> alerts = testHarness.extractOutputValues();
@@ -267,7 +256,7 @@ class ThermalSpikeProcessFunctionTest {
 
         // DEGRADED mode
         testHarness.processElement(AssetEvent.fromOperatingMode(new AssetOperatingModeEvent("turbine-degraded", "DEGRADED", now)), now.toEpochMilli());
-        Telemetry t1 = new Telemetry("turbine-degraded", "sensor-1", now.plusSeconds(1), 1.0, 90.0);
+        Telemetry t1 = new Telemetry("turbine-degraded", now.plusSeconds(1), 1.0, 90.0);
         testHarness.processElement(AssetEvent.fromTelemetry(t1), now.plusSeconds(1).toEpochMilli());
 
         List<Alert> alerts = testHarness.extractOutputValues();
@@ -276,7 +265,7 @@ class ThermalSpikeProcessFunctionTest {
 
         // OFFLINE mode
         testHarness.processElement(AssetEvent.fromOperatingMode(new AssetOperatingModeEvent("turbine-offline", "OFFLINE", now)), now.toEpochMilli());
-        Telemetry t2 = new Telemetry("turbine-offline", "sensor-1", now.plusSeconds(2), 1.0, 92.0);
+        Telemetry t2 = new Telemetry("turbine-offline", now.plusSeconds(2), 1.0, 92.0);
         testHarness.processElement(AssetEvent.fromTelemetry(t2), now.plusSeconds(2).toEpochMilli());
 
         alerts = testHarness.extractOutputValues();
@@ -289,8 +278,8 @@ class ThermalSpikeProcessFunctionTest {
         Instant now = Instant.ofEpochMilli(1700000000000L);
 
         // Later event arrives first
-        Telemetry tLater = new Telemetry("turbine-ooo", "sensor-1", now.plusSeconds(2), 1.0, 95.0);
-        Telemetry tEarlier = new Telemetry("turbine-ooo", "sensor-1", now, 1.0, 90.0);
+        Telemetry tLater = new Telemetry("turbine-ooo", now.plusSeconds(2), 1.0, 95.0);
+        Telemetry tEarlier = new Telemetry("turbine-ooo", now, 1.0, 90.0);
 
         testHarness.processElement(AssetEvent.fromTelemetry(tLater), now.plusSeconds(2).toEpochMilli());
         testHarness.processElement(AssetEvent.fromTelemetry(tEarlier), now.toEpochMilli());
@@ -305,13 +294,13 @@ class ThermalSpikeProcessFunctionTest {
         Instant now = Instant.ofEpochMilli(1700000000000L);
 
         // Spike
-        Telemetry tSpike = new Telemetry("turbine-cooldown", "sensor-1", now, 1.0, 95.0);
+        Telemetry tSpike = new Telemetry("turbine-cooldown", now, 1.0, 95.0);
         testHarness.processElement(AssetEvent.fromTelemetry(tSpike), now.toEpochMilli());
         assertEquals(1, testHarness.extractOutputValues().size());
 
         // Normal temperatures after window duration (5 seconds window size)
         for (int i = 6; i <= 12; i++) {
-            Telemetry tNormal = new Telemetry("turbine-cooldown", "sensor-1", now.plusSeconds(i), 1.0, 45.0);
+            Telemetry tNormal = new Telemetry("turbine-cooldown", now.plusSeconds(i), 1.0, 45.0);
             testHarness.processElement(AssetEvent.fromTelemetry(tNormal), now.plusSeconds(i).toEpochMilli());
         }
 

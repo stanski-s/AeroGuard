@@ -93,10 +93,6 @@ public class ThermalSpikeProcessFunction extends KeyedBroadcastProcessFunction<S
                 return;
             }
 
-            if (value.getSensorId() != null && isNonGeneratorOrVibrationSensor(value.getSensorId())) {
-                return;
-            }
-
             List<Double> recentTemperatures = new ArrayList<>();
             Iterable<Double> currentTemps = recentTemperaturesState.get();
             if (currentTemps != null) {
@@ -161,7 +157,6 @@ public class ThermalSpikeProcessFunction extends KeyedBroadcastProcessFunction<S
                     Alert alert = new Alert(
                             alertId,
                             value.getAssetId(),
-                            value.getSensorId(),
                             DEFAULT_ALERT_TYPE,
                             rollingAvg,
                             effectiveThreshold,
@@ -208,11 +203,6 @@ public class ThermalSpikeProcessFunction extends KeyedBroadcastProcessFunction<S
             return "GLOBAL";
         }
         return assetId;
-    }
-
-    private boolean isNonGeneratorOrVibrationSensor(String sensorId) {
-        String lower = sensorId.toLowerCase();
-        return lower.contains("vibration") || lower.contains("vibr");
     }
 
     public static String generateAlertId(String assetId, long timestampMs, String alertType) {

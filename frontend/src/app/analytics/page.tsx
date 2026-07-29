@@ -51,7 +51,6 @@ export default function AnalyticsPage() {
         lng: asset.lng,
         mode: modeLabel,
         isRealMode: hasData,
-        sensorId: latest?.sensor_id || "-",
         historyCount: history.length,
         latestPower: hasData && latest?.powerOutputMw !== undefined ? `${latest.powerOutputMw.toFixed(1)} MW` : (isConnected ? "NO DATA" : "NO CONNECTION"),
         latestRotor: hasData && latest?.rotorSpeedRpm !== undefined ? `${latest.rotorSpeedRpm.toFixed(1)} RPM` : (isConnected ? "NO DATA" : "NO CONNECTION"),
@@ -180,7 +179,6 @@ export default function AnalyticsPage() {
                 <th className="py-2.5 px-3">Unit Name</th>
                 <th className="py-2.5 px-3">Cluster</th>
                 <th className="py-2.5 px-3">Location</th>
-                <th className="py-2.5 px-3">Sensor ID</th>
                 <th className="py-2.5 px-3">Mode</th>
                 <th className="py-2.5 px-3">Power</th>
                 <th className="py-2.5 px-3">Rotor</th>
@@ -200,7 +198,6 @@ export default function AnalyticsPage() {
                   <td className="py-3 px-3 font-semibold">{item.name}</td>
                   <td className="py-3 px-3 text-[#424750]">{item.clusterName}</td>
                   <td className="py-3 px-3 text-[#424750]">{item.locationName}</td>
-                  <td className="py-3 px-3 text-[#424750]">{item.sensorId}</td>
                   <td className="py-3 px-3">
                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                       !item.isRealMode

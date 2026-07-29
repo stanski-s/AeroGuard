@@ -118,7 +118,6 @@ public class TelemetrySimulator {
                     break;
             }
 
-            String sensorId = "temp-" + assetId;
             double formattedTemp = Math.round(temperature * 100.0) / 100.0;
             double formattedVib = Math.round(vibration * 1000.0) / 1000.0;
             double formattedPower = Math.round(powerOutputMw * 10.0) / 10.0;
@@ -127,7 +126,7 @@ public class TelemetrySimulator {
             double formattedNacelle = Math.round(nacelleTempC * 10.0) / 10.0;
 
             return new Telemetry(
-                    assetId, sensorId, Instant.now(), formattedVib, formattedTemp,
+                    assetId, Instant.now(), formattedVib, formattedTemp,
                     formattedPower, formattedPitch, formattedRpm, formattedNacelle
             );
         }
@@ -159,7 +158,6 @@ public class TelemetrySimulator {
     }
 
     public static Telemetry generateTelemetry(String assetId, double curTemp, Random random) {
-        String sensorId = "temp-" + assetId;
         double vibration = 0.12 + (random.nextDouble() * 0.22);
         double formattedTemp = Math.round(curTemp * 100.0) / 100.0;
         double formattedVib = Math.round(vibration * 1000.0) / 1000.0;
@@ -170,7 +168,7 @@ public class TelemetrySimulator {
         double nacelleTempC = Math.round((34.0 + random.nextDouble() * 8.0) * 10.0) / 10.0;
 
         return new Telemetry(
-                assetId, sensorId, Instant.now(), formattedVib, formattedTemp,
+                assetId, Instant.now(), formattedVib, formattedTemp,
                 powerOutputMw, pitchAngleDeg, rotorSpeedRpm, nacelleTempC
         );
     }

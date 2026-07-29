@@ -47,7 +47,6 @@ export function useTelemetryStream(url: string = DEFAULT_WS_URL) {
               } else if (type === "TELEMETRY" && payload) {
                 const point: TelemetryPoint = {
                   asset_id: payload.assetId || payload.asset_id,
-                  sensor_id: payload.sensorId || payload.sensor_id || `temp-${payload.assetId}`,
                   temperature: payload.temperature,
                   vibration: payload.vibration,
                   powerOutputMw: payload.powerOutputMw ?? payload.power_output_mw,

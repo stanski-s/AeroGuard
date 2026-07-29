@@ -63,19 +63,19 @@ public class TelemetryPipelineIntegrationTest {
         Instant baseTime = Instant.parse("2026-07-29T12:00:00Z");
 
         // 1. Prepare Telemetry & Operating Mode Events
-        Telemetry t1 = new Telemetry("INT-WTG-01", "sensor-1", baseTime, 0.4, 65.0);
+        Telemetry t1 = new Telemetry("INT-WTG-01", baseTime, 0.4, 65.0);
         t1.setPowerOutputMw(12.5);
         t1.setPitchAngleDeg(4.2);
         t1.setRotorSpeedRpm(7.5);
         t1.setNacelleTempC(36.0);
 
-        Telemetry t2 = new Telemetry("INT-WTG-01", "sensor-1", baseTime.plusSeconds(10), 0.5, 88.0); // Breach threshold 80.0
+        Telemetry t2 = new Telemetry("INT-WTG-01", baseTime.plusSeconds(10), 0.5, 88.0); // Breach threshold 80.0
         t2.setPowerOutputMw(13.0);
         t2.setPitchAngleDeg(4.1);
         t2.setRotorSpeedRpm(7.8);
         t2.setNacelleTempC(41.0);
 
-        Telemetry t3Maintenance = new Telemetry("INT-WTG-02", "sensor-1", baseTime.plusSeconds(15), 0.6, 92.0); // High temp but maintenance mode
+        Telemetry t3Maintenance = new Telemetry("INT-WTG-02", baseTime.plusSeconds(15), 0.6, 92.0); // High temp but maintenance mode
 
         AssetOperatingModeEvent modeMaint = new AssetOperatingModeEvent("INT-WTG-02", "MAINTENANCE_MODE", baseTime);
         AssetOperatingModeEvent modeOnline = new AssetOperatingModeEvent("INT-WTG-01", "ONLINE", baseTime);

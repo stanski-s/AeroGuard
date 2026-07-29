@@ -52,7 +52,6 @@ class WebSocketGatewayTest {
                 {
                   "alert_id": "12345-67890",
                   "asset_id": "turbine-99",
-                  "sensor_id": "temp-sensor-1",
                   "alert_type": "THERMAL_SPIKE",
                   "temperature": 92.5,
                   "threshold": 80.0,

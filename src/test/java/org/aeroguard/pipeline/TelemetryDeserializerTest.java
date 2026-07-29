@@ -36,7 +36,6 @@ class TelemetryDeserializerTest {
 
         assertNotNull(telemetry);
         assertEquals("turbine-101", telemetry.getAssetId());
-        assertEquals("temp-sensor-01", telemetry.getSensorId());
         assertEquals(Instant.parse("2026-07-29T10:00:00Z"), telemetry.getTimestamp());
         assertEquals(0.45, telemetry.getVibration(), 0.001);
         assertEquals(82.5, telemetry.getTemperature(), 0.001);
@@ -64,7 +63,6 @@ class TelemetryDeserializerTest {
 
         assertNotNull(telemetry);
         assertEquals("turbine-102", telemetry.getAssetId());
-        assertEquals("temp-sensor-02", telemetry.getSensorId());
         assertEquals(Instant.parse("2026-07-29T10:05:00Z"), telemetry.getTimestamp());
         assertEquals(0.30, telemetry.getVibration(), 0.001);
         assertEquals(71.0, telemetry.getTemperature(), 0.001);
@@ -87,7 +85,6 @@ class TelemetryDeserializerTest {
 
         assertNotNull(telemetry);
         assertEquals("turbine-103", telemetry.getAssetId());
-        assertEquals("sensor-03", telemetry.getSensorId());
         assertEquals(0.12, telemetry.getVibration(), 0.001);
         assertEquals(65.0, telemetry.getTemperature(), 0.001);
         assertEquals(0.0, telemetry.getPowerOutputMw(), 0.001);

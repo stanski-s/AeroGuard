@@ -15,11 +15,11 @@ class TelemetryAggregatorTest {
         TelemetryPipeline.Accumulator acc = aggregator.createAccumulator();
         
         Instant t1 = Instant.parse("2024-01-01T10:01:00Z");
-        Telemetry tm1 = new Telemetry("asset1", "sensor1", t1, 2.5, 60.0, 12.0, 4.0, 7.0, 36.0);
+        Telemetry tm1 = new Telemetry("asset1", t1, 2.5, 60.0, 12.0, 4.0, 7.0, 36.0);
         acc = aggregator.add(tm1, acc);
         
         Instant t2 = Instant.parse("2024-01-01T10:01:30Z");
-        Telemetry tm2 = new Telemetry("asset1", "sensor1", t2, 3.5, 75.0, 14.0, 4.4, 7.4, 40.0);
+        Telemetry tm2 = new Telemetry("asset1", t2, 3.5, 75.0, 14.0, 4.4, 7.4, 40.0);
         acc = aggregator.add(tm2, acc);
         
         TelemetryPipeline.AssetMetric result = aggregator.getResult(acc);

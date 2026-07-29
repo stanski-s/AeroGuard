@@ -9,9 +9,6 @@ public class TelemetryRecord implements Serializable {
     @JsonProperty("asset_id")
     private String assetId;
 
-    @JsonProperty("sensor_id")
-    private String sensorId;
-
     @JsonProperty("timestamp")
     private long timestamp;
 
@@ -35,14 +32,13 @@ public class TelemetryRecord implements Serializable {
 
     public TelemetryRecord() {}
 
-    public TelemetryRecord(String assetId, String sensorId, long timestamp, double vibration, double temperature) {
-        this(assetId, sensorId, timestamp, vibration, temperature, 0.0, 0.0, 0.0, 0.0);
+    public TelemetryRecord(String assetId, long timestamp, double vibration, double temperature) {
+        this(assetId, timestamp, vibration, temperature, 0.0, 0.0, 0.0, 0.0);
     }
 
-    public TelemetryRecord(String assetId, String sensorId, long timestamp, double vibration, double temperature,
+    public TelemetryRecord(String assetId, long timestamp, double vibration, double temperature,
                            double powerOutputMw, double pitchAngleDeg, double rotorSpeedRpm, double nacelleTempC) {
         this.assetId = assetId;
-        this.sensorId = sensorId;
         this.timestamp = timestamp;
         this.vibration = vibration;
         this.temperature = temperature;
@@ -55,7 +51,6 @@ public class TelemetryRecord implements Serializable {
     public static TelemetryRecord fromTelemetry(Telemetry t) {
         return new TelemetryRecord(
                 t.getAssetId(),
-                t.getSensorId(),
                 t.getTimestamp() != null ? t.getTimestamp().toEpochMilli() : 0L,
                 t.getVibration(),
                 t.getTemperature(),
@@ -72,14 +67,6 @@ public class TelemetryRecord implements Serializable {
 
     public void setAssetId(String assetId) {
         this.assetId = assetId;
-    }
-
-    public String getSensorId() {
-        return sensorId;
-    }
-
-    public void setSensorId(String sensorId) {
-        this.sensorId = sensorId;
     }
 
     public long getTimestamp() {
@@ -142,7 +129,6 @@ public class TelemetryRecord implements Serializable {
     public String toString() {
         return "TelemetryRecord{" +
                 "assetId='" + assetId + '\'' +
-                ", sensorId='" + sensorId + '\'' +
                 ", timestamp=" + timestamp +
                 ", vibration=" + vibration +
                 ", temperature=" + temperature +

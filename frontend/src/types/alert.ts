@@ -13,7 +13,6 @@ export interface DiagnosticAction {
 export interface CriticalAlert {
   alert_id: string;
   asset_id: string;
-  sensor_id: string;
   alert_type: AlertType;
   temperature: number;
   threshold: number;

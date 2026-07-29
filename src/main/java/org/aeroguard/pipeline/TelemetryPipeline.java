@@ -240,6 +240,40 @@ public class TelemetryPipeline {
                 .map(new AlertSerializer())
                 .sinkTo(alertKafkaSink);
 
+        alertStream.addSink(JdbcSink.sink(
+                "INSERT INTO alerts (alert_id, timestamp, asset_id, alert_type, trigger_value, threshold, vibration, temperature, power_output_mw, pitch_angle_deg, rotor_speed_rpm, nacelle_temp_c, message, action_id, action_title) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+                        "ON CONFLICT (timestamp, alert_id) DO NOTHING",
+                (statement, alert) -> {
+                    statement.setString(1, alert.getAlertId());
+                    statement.setTimestamp(2, Timestamp.from(alert.getTimestamp() != null ? alert.getTimestamp() : Instant.now()));
+                    statement.setString(3, alert.getAssetId());
+                    statement.setString(4, alert.getAlertType());
+                    statement.setDouble(5, alert.getTriggerValue());
+                    statement.setDouble(6, alert.getThreshold());
+                    statement.setDouble(7, alert.getVibration());
+                    statement.setDouble(8, alert.getTemperature());
+                    statement.setDouble(9, alert.getPowerOutputMw());
+                    statement.setDouble(10, alert.getPitchAngleDeg());
+                    statement.setDouble(11, alert.getRotorSpeedRpm());
+                    statement.setDouble(12, alert.getNacelleTempC());
+                    statement.setString(13, alert.getMessage());
+                    statement.setString(14, alert.getDiagnosticAction() != null ? alert.getDiagnosticAction().getActionId() : null);
+                    statement.setString(15, alert.getDiagnosticAction() != null ? alert.getDiagnosticAction().getTitle() : null);
+                },
+                JdbcExecutionOptions.builder()
+                        .withBatchSize(1)
+                        .withBatchIntervalMs(100)
+                        .withMaxRetries(5)
+                        .build(),
+                new JdbcConnectionOptions.JdbcConnectionOptionsBuilder()
+                        .withUrl(DB_URL)
+                        .withDriverName("org.postgresql.Driver")
+                        .withUsername(DB_USER)
+                        .withPassword(DB_PASSWORD)
+                        .build()
+        ));
+
         env.execute("End-to-end Telemetry Ingestion");
     }
 
