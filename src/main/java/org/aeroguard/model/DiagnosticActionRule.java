@@ -1,23 +1,30 @@
 package org.aeroguard.model;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.io.Serializable;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class DiagnosticActionRule implements Serializable {
     private static final long serialVersionUID = 1L;
 
     public static final String GLOBAL_KEY = "GLOBAL";
 
     @JsonProperty("rule_id")
+    @JsonAlias({"ruleId", "rule_id"})
     private String ruleId;
 
     @JsonProperty("asset_id")
+    @JsonAlias({"assetId", "asset_id"})
     private String assetId;
 
     @JsonProperty("alert_type")
+    @JsonAlias({"alertType", "alert_type"})
     private String alertType;
 
     @JsonProperty("operating_mode")
+    @JsonAlias({"operatingMode", "operating_mode"})
     private String operatingMode;
 
     @JsonProperty("action")

@@ -1,35 +1,44 @@
 package org.aeroguard.model;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.Instant;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class Telemetry {
-    
+
     @JsonProperty("asset_id")
+    @JsonAlias({"assetId", "asset_id"})
     private String assetId;
-    
+
     @JsonProperty("sensor_id")
+    @JsonAlias({"sensorId", "sensor_id"})
     private String sensorId;
-    
+
     @JsonProperty("timestamp")
     private Instant timestamp;
-    
+
     @JsonProperty("vibration")
     private double vibration;
-    
+
     @JsonProperty("temperature")
     private double temperature;
 
     @JsonProperty("power_output_mw")
+    @JsonAlias({"powerOutputMw", "power_output_mw"})
     private double powerOutputMw;
 
     @JsonProperty("pitch_angle_deg")
+    @JsonAlias({"pitchAngleDeg", "pitch_angle_deg"})
     private double pitchAngleDeg;
 
     @JsonProperty("rotor_speed_rpm")
+    @JsonAlias({"rotorSpeedRpm", "rotor_speed_rpm"})
     private double rotorSpeedRpm;
 
     @JsonProperty("nacelle_temp_c")
+    @JsonAlias({"nacelleTempC", "nacelle_temp_c"})
     private double nacelleTempC;
 
     public Telemetry() {}

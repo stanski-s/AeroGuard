@@ -260,4 +260,74 @@ class ThermalSpikeProcessFunctionTest {
         assertEquals("ACT-TEST-99", alert.getDiagnosticAction().getActionId());
         assertEquals("Remote Pitch Aerodynamic Calibration", alert.getDiagnosticAction().getTitle());
     }
+
+    @Test
+    void testDegradedAndOfflineModesDoNotSuppressAlerts() throws Exception {
+        Instant now = Instant.ofEpochMilli(1700000000000L);
+
+        // DEGRADED mode
+        testHarness.processElement(AssetEvent.fromOperatingMode(new AssetOperatingModeEvent("turbine-degraded", "DEGRADED", now)), now.toEpochMilli());
+        Telemetry t1 = new Telemetry("turbine-degraded", "sensor-1", now.plusSeconds(1), 1.0, 90.0);
+        testHarness.processElement(AssetEvent.fromTelemetry(t1), now.plusSeconds(1).toEpochMilli());
+
+        List<Alert> alerts = testHarness.extractOutputValues();
+        assertEquals(1, alerts.size());
+        assertEquals("turbine-degraded", alerts.get(0).getAssetId());
+
+        // OFFLINE mode
+        testHarness.processElement(AssetEvent.fromOperatingMode(new AssetOperatingModeEvent("turbine-offline", "OFFLINE", now)), now.toEpochMilli());
+        Telemetry t2 = new Telemetry("turbine-offline", "sensor-1", now.plusSeconds(2), 1.0, 92.0);
+        testHarness.processElement(AssetEvent.fromTelemetry(t2), now.plusSeconds(2).toEpochMilli());
+
+        alerts = testHarness.extractOutputValues();
+        assertEquals(2, alerts.size());
+        assertEquals("turbine-offline", alerts.get(1).getAssetId());
+    }
+
+    @Test
+    void testOutofOrderTelemetryProcessing() throws Exception {
+        Instant now = Instant.ofEpochMilli(1700000000000L);
+
+        // Later event arrives first
+        Telemetry tLater = new Telemetry("turbine-ooo", "sensor-1", now.plusSeconds(2), 1.0, 95.0);
+        Telemetry tEarlier = new Telemetry("turbine-ooo", "sensor-1", now, 1.0, 90.0);
+
+        testHarness.processElement(AssetEvent.fromTelemetry(tLater), now.plusSeconds(2).toEpochMilli());
+        testHarness.processElement(AssetEvent.fromTelemetry(tEarlier), now.toEpochMilli());
+
+        List<Alert> alerts = testHarness.extractOutputValues();
+        assertFalse(alerts.isEmpty(), "Out of order events breaching threshold must emit alerts");
+        assertEquals("turbine-ooo", alerts.get(0).getAssetId());
+    }
+
+    @Test
+    void testTemperatureCoolDownResetsSpikeState() throws Exception {
+        Instant now = Instant.ofEpochMilli(1700000000000L);
+
+        // Spike
+        Telemetry tSpike = new Telemetry("turbine-cooldown", "sensor-1", now, 1.0, 95.0);
+        testHarness.processElement(AssetEvent.fromTelemetry(tSpike), now.toEpochMilli());
+        assertEquals(1, testHarness.extractOutputValues().size());
+
+        // Normal temperatures after window duration (5 seconds window size)
+        for (int i = 6; i <= 12; i++) {
+            Telemetry tNormal = new Telemetry("turbine-cooldown", "sensor-1", now.plusSeconds(i), 1.0, 45.0);
+            testHarness.processElement(AssetEvent.fromTelemetry(tNormal), now.plusSeconds(i).toEpochMilli());
+        }
+
+        // Output size shouldn't grow further since temperatures cooled down below 80.0°C
+        assertEquals(1, testHarness.extractOutputValues().size());
+    }
+
+    @Test
+    void testDeterministicAlertIdConsistency() {
+        long timestamp = 1700000000000L;
+        String id1 = ThermalSpikeProcessFunction.generateAlertId("turbine-id-test", timestamp, "THERMAL_SPIKE");
+        String id2 = ThermalSpikeProcessFunction.generateAlertId("turbine-id-test", timestamp, "THERMAL_SPIKE");
+        String id3 = ThermalSpikeProcessFunction.generateAlertId("turbine-id-test", timestamp + 1000, "THERMAL_SPIKE");
+
+        assertEquals(id1, id2, "Alert ID must be completely deterministic for identical inputs");
+        assertNotEquals(id1, id3, "Different timestamps must produce distinct Alert IDs");
+    }
 }
+

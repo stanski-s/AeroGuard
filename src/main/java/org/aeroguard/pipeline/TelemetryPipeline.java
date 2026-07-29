@@ -113,6 +113,7 @@ public class TelemetryPipeline {
                 .map(new TelemetryDeserializer())
                 .assignTimestampsAndWatermarks(
                         WatermarkStrategy.<Telemetry>forBoundedOutOfOrderness(Duration.ofSeconds(5))
+                                .withIdleness(Duration.ofSeconds(5))
                                 .withTimestampAssigner((event, timestamp) -> event.getTimestamp().toEpochMilli())
                 );
 
@@ -166,6 +167,7 @@ public class TelemetryPipeline {
                 .map(new AssetOperatingModeDeserializer())
                 .assignTimestampsAndWatermarks(
                         WatermarkStrategy.<AssetOperatingModeEvent>forBoundedOutOfOrderness(Duration.ofSeconds(5))
+                                .withIdleness(Duration.ofSeconds(5))
                                 .withTimestampAssigner((event, timestamp) ->
                                         event.getTimestamp() != null ? event.getTimestamp().toEpochMilli() : System.currentTimeMillis())
                 );
@@ -178,7 +180,7 @@ public class TelemetryPipeline {
 
         DataStream<AssetMetric> aggregatedStream = telemetryStream
                 .keyBy(Telemetry::getAssetId)
-                .window(TumblingEventTimeWindows.of(Time.minutes(5)))
+                .window(TumblingEventTimeWindows.of(Time.minutes(1)))
                 .aggregate(new TelemetryAggregator());
 
         aggregatedStream.addSink(JdbcSink.sink(

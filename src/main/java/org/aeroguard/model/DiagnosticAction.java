@@ -1,12 +1,16 @@
 package org.aeroguard.model;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.io.Serializable;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class DiagnosticAction implements Serializable {
     private static final long serialVersionUID = 1L;
 
     @JsonProperty("action_id")
+    @JsonAlias({"actionId", "action_id"})
     private String actionId;
 
     @JsonProperty("title")
@@ -22,9 +26,11 @@ public class DiagnosticAction implements Serializable {
     private int priority;
 
     @JsonProperty("recommended_role")
+    @JsonAlias({"recommendedRole", "recommended_role", "target_actor", "targetActor"})
     private String recommendedRole;
 
     @JsonProperty("is_fallback")
+    @JsonAlias({"isFallback", "is_fallback", "fallback"})
     private boolean fallback;
 
     public DiagnosticAction() {}

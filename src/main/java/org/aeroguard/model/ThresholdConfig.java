@@ -1,18 +1,23 @@
 package org.aeroguard.model;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class ThresholdConfig {
 
     public static final String DEFAULT_ALERT_TYPE = "THERMAL_SPIKE";
 
     @JsonProperty("asset_id")
+    @JsonAlias({"assetId", "asset_id"})
     private String assetId;
 
     @JsonProperty("threshold")
     private double threshold;
 
     @JsonProperty("alert_type")
+    @JsonAlias({"alertType", "alert_type"})
     private String alertType = DEFAULT_ALERT_TYPE;
 
     public ThresholdConfig() {}
