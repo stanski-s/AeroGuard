@@ -184,16 +184,24 @@ public class TelemetryPipeline {
                 .aggregate(new TelemetryAggregator());
 
         aggregatedStream.addSink(JdbcSink.sink(
-                "INSERT INTO turbine_metrics_5m (time, asset_id, avg_vibration, max_temperature) " +
-                        "VALUES (?, ?, ?, ?) " +
+                "INSERT INTO turbine_metrics_1m (time, asset_id, avg_vibration, max_temperature, avg_power_output_mw, avg_pitch_angle_deg, avg_rotor_speed_rpm, max_nacelle_temp_c) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?) " +
                         "ON CONFLICT (time, asset_id) DO UPDATE SET " +
                         "avg_vibration = EXCLUDED.avg_vibration, " +
-                        "max_temperature = EXCLUDED.max_temperature",
+                        "max_temperature = EXCLUDED.max_temperature, " +
+                        "avg_power_output_mw = EXCLUDED.avg_power_output_mw, " +
+                        "avg_pitch_angle_deg = EXCLUDED.avg_pitch_angle_deg, " +
+                        "avg_rotor_speed_rpm = EXCLUDED.avg_rotor_speed_rpm, " +
+                        "max_nacelle_temp_c = EXCLUDED.max_nacelle_temp_c",
                 (statement, metric) -> {
                     statement.setTimestamp(1, Timestamp.from(metric.time));
                     statement.setString(2, metric.assetId);
                     statement.setDouble(3, metric.avgVibration);
                     statement.setDouble(4, metric.maxTemperature);
+                    statement.setDouble(5, metric.avgPowerOutputMw);
+                    statement.setDouble(6, metric.avgPitchAngleDeg);
+                    statement.setDouble(7, metric.avgRotorSpeedRpm);
+                    statement.setDouble(8, metric.maxNacelleTempC);
                 },
                 JdbcExecutionOptions.builder()
                         .withBatchSize(100)
@@ -310,14 +318,23 @@ public class TelemetryPipeline {
         public String assetId;
         public double avgVibration;
         public double maxTemperature;
+        public double avgPowerOutputMw;
+        public double avgPitchAngleDeg;
+        public double avgRotorSpeedRpm;
+        public double maxNacelleTempC;
 
         public AssetMetric() {}
 
-        public AssetMetric(Instant time, String assetId, double avgVibration, double maxTemperature) {
+        public AssetMetric(Instant time, String assetId, double avgVibration, double maxTemperature,
+                           double avgPowerOutputMw, double avgPitchAngleDeg, double avgRotorSpeedRpm, double maxNacelleTempC) {
             this.time = time;
             this.assetId = assetId;
             this.avgVibration = avgVibration;
             this.maxTemperature = maxTemperature;
+            this.avgPowerOutputMw = avgPowerOutputMw;
+            this.avgPitchAngleDeg = avgPitchAngleDeg;
+            this.avgRotorSpeedRpm = avgRotorSpeedRpm;
+            this.maxNacelleTempC = maxNacelleTempC;
         }
     }
 
@@ -326,6 +343,17 @@ public class TelemetryPipeline {
         public double sumVibration = 0;
         public long countVibration = 0;
         public double maxTemperature = Double.MIN_VALUE;
+
+        public double sumPowerOutputMw = 0;
+        public long countPowerOutputMw = 0;
+
+        public double sumPitchAngleDeg = 0;
+        public long countPitchAngleDeg = 0;
+
+        public double sumRotorSpeedRpm = 0;
+        public long countRotorSpeedRpm = 0;
+
+        public double maxNacelleTempC = Double.MIN_VALUE;
         public Instant windowEnd;
     }
 
@@ -341,8 +369,20 @@ public class TelemetryPipeline {
             accumulator.sumVibration += value.getVibration();
             accumulator.countVibration++;
             accumulator.maxTemperature = Math.max(accumulator.maxTemperature, value.getTemperature());
+
+            accumulator.sumPowerOutputMw += value.getPowerOutputMw();
+            accumulator.countPowerOutputMw++;
+
+            accumulator.sumPitchAngleDeg += value.getPitchAngleDeg();
+            accumulator.countPitchAngleDeg++;
+
+            accumulator.sumRotorSpeedRpm += value.getRotorSpeedRpm();
+            accumulator.countRotorSpeedRpm++;
+
+            accumulator.maxNacelleTempC = Math.max(accumulator.maxNacelleTempC, value.getNacelleTempC());
+
             long epoch = value.getTimestamp().toEpochMilli();
-            long windowSizeMs = 5 * 60 * 1000;
+            long windowSizeMs = 1 * 60 * 1000;
             long windowStart = (epoch / windowSizeMs) * windowSizeMs;
             accumulator.windowEnd = Instant.ofEpochMilli(windowStart);
             return accumulator;
@@ -354,7 +394,11 @@ public class TelemetryPipeline {
                     accumulator.windowEnd,
                     accumulator.assetId,
                     accumulator.countVibration == 0 ? 0 : accumulator.sumVibration / accumulator.countVibration,
-                    accumulator.maxTemperature == Double.MIN_VALUE ? 0 : accumulator.maxTemperature
+                    accumulator.maxTemperature == Double.MIN_VALUE ? 0 : accumulator.maxTemperature,
+                    accumulator.countPowerOutputMw == 0 ? 0 : accumulator.sumPowerOutputMw / accumulator.countPowerOutputMw,
+                    accumulator.countPitchAngleDeg == 0 ? 0 : accumulator.sumPitchAngleDeg / accumulator.countPitchAngleDeg,
+                    accumulator.countRotorSpeedRpm == 0 ? 0 : accumulator.sumRotorSpeedRpm / accumulator.countRotorSpeedRpm,
+                    accumulator.maxNacelleTempC == Double.MIN_VALUE ? 0 : accumulator.maxNacelleTempC
             );
         }
 
@@ -365,6 +409,18 @@ public class TelemetryPipeline {
             acc.sumVibration = a.sumVibration + b.sumVibration;
             acc.countVibration = a.countVibration + b.countVibration;
             acc.maxTemperature = Math.max(a.maxTemperature, b.maxTemperature);
+
+            acc.sumPowerOutputMw = a.sumPowerOutputMw + b.sumPowerOutputMw;
+            acc.countPowerOutputMw = a.countPowerOutputMw + b.countPowerOutputMw;
+
+            acc.sumPitchAngleDeg = a.sumPitchAngleDeg + b.sumPitchAngleDeg;
+            acc.countPitchAngleDeg = a.countPitchAngleDeg + b.countPitchAngleDeg;
+
+            acc.sumRotorSpeedRpm = a.sumRotorSpeedRpm + b.sumRotorSpeedRpm;
+            acc.countRotorSpeedRpm = a.countRotorSpeedRpm + b.countRotorSpeedRpm;
+
+            acc.maxNacelleTempC = Math.max(a.maxNacelleTempC, b.maxNacelleTempC);
+
             acc.windowEnd = a.windowEnd != null ? a.windowEnd : b.windowEnd;
             return acc;
         }
