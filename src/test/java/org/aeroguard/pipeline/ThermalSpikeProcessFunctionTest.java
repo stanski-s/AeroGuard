@@ -251,26 +251,17 @@ class ThermalSpikeProcessFunctionTest {
     }
 
     @Test
-    void testDegradedAndOfflineModesDoNotSuppressAlerts() throws Exception {
+    void testOfflineModeDoesNotSuppressAlerts() throws Exception {
         Instant now = Instant.ofEpochMilli(1700000000000L);
-
-        // DEGRADED mode
-        testHarness.processElement(AssetEvent.fromOperatingMode(new AssetOperatingModeEvent("turbine-degraded", "DEGRADED", now)), now.toEpochMilli());
-        Telemetry t1 = new Telemetry("turbine-degraded", now.plusSeconds(1), 1.0, 90.0);
-        testHarness.processElement(AssetEvent.fromTelemetry(t1), now.plusSeconds(1).toEpochMilli());
-
-        List<Alert> alerts = testHarness.extractOutputValues();
-        assertEquals(1, alerts.size());
-        assertEquals("turbine-degraded", alerts.get(0).getAssetId());
 
         // OFFLINE mode
         testHarness.processElement(AssetEvent.fromOperatingMode(new AssetOperatingModeEvent("turbine-offline", "OFFLINE", now)), now.toEpochMilli());
         Telemetry t2 = new Telemetry("turbine-offline", now.plusSeconds(2), 1.0, 92.0);
         testHarness.processElement(AssetEvent.fromTelemetry(t2), now.plusSeconds(2).toEpochMilli());
 
-        alerts = testHarness.extractOutputValues();
-        assertEquals(2, alerts.size());
-        assertEquals("turbine-offline", alerts.get(1).getAssetId());
+        List<Alert> alerts = testHarness.extractOutputValues();
+        assertEquals(1, alerts.size());
+        assertEquals("turbine-offline", alerts.get(0).getAssetId());
     }
 
     @Test

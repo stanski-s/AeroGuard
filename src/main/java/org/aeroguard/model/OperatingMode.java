@@ -3,7 +3,6 @@ package org.aeroguard.model;
 public enum OperatingMode {
     ONLINE,
     MAINTENANCE_MODE,
-    DEGRADED,
     OFFLINE;
 
     public static boolean isMaintenanceMode(String mode) {

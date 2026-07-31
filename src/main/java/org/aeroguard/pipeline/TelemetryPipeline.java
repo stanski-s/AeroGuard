@@ -66,7 +66,7 @@ public class TelemetryPipeline {
     private static final String S3_ACCESS_KEY = System.getenv().getOrDefault("S3_ACCESS_KEY", "minioadmin");
     private static final String S3_SECRET_KEY = System.getenv().getOrDefault("S3_SECRET_KEY", "minioadmin");
     private static final String S3_BUCKET = System.getenv().getOrDefault("S3_BUCKET", "aeroguard-telemetry");
-    private static final String S3_PATH = System.getenv().getOrDefault("S3_PATH", "s3a://" + S3_BUCKET + "/raw");
+    private static final String S3_PATH = System.getenv().getOrDefault("S3_PATH", "file:///tmp/" + S3_BUCKET + "/raw");
 
     public static final OutputTag<String> DLQ_TAG = new OutputTag<>("telemetry-dlq", Types.STRING);
 

@@ -9,6 +9,7 @@ export const INITIAL_ASSETS: AssetInfo[] = [
     lat: 54.20,
     lng: 14.76,
     operatingMode: "ONLINE",
+    clusterName: "Baltic Western Array",
     locationName: "Baltic Western Array (Pomerania)",
   },
   {
@@ -18,6 +19,7 @@ export const INITIAL_ASSETS: AssetInfo[] = [
     lat: 54.20,
     lng: 14.82,
     operatingMode: "ONLINE",
+    clusterName: "Baltic Western Array",
     locationName: "Baltic Western Array (Pomerania)",
   },
   {
@@ -27,6 +29,7 @@ export const INITIAL_ASSETS: AssetInfo[] = [
     lat: 54.24,
     lng: 14.76,
     operatingMode: "MAINTENANCE_MODE",
+    clusterName: "Baltic Western Array",
     locationName: "Baltic Western Array (Pomerania)",
   },
   {
@@ -36,6 +39,7 @@ export const INITIAL_ASSETS: AssetInfo[] = [
     lat: 54.24,
     lng: 14.82,
     operatingMode: "ONLINE",
+    clusterName: "Baltic Western Array",
     locationName: "Baltic Western Array (Pomerania)",
   },
 
@@ -47,6 +51,7 @@ export const INITIAL_ASSETS: AssetInfo[] = [
     lat: 54.83,
     lng: 17.15,
     operatingMode: "ONLINE",
+    clusterName: "Baltic Central Array",
     locationName: "Baltic Central Array (Słupsk)",
   },
   {
@@ -55,7 +60,8 @@ export const INITIAL_ASSETS: AssetInfo[] = [
     type: "WIND_TURBINE",
     lat: 54.86,
     lng: 17.20,
-    operatingMode: "DEGRADED",
+    operatingMode: "ONLINE",
+    clusterName: "Baltic Central Array",
     locationName: "Baltic Central Array (Słupsk)",
   },
   {
@@ -65,6 +71,7 @@ export const INITIAL_ASSETS: AssetInfo[] = [
     lat: 54.83,
     lng: 17.25,
     operatingMode: "ONLINE",
+    clusterName: "Baltic Central Array",
     locationName: "Baltic Central Array (Słupsk)",
   },
 
@@ -76,6 +83,7 @@ export const INITIAL_ASSETS: AssetInfo[] = [
     lat: 54.83,
     lng: 19.05,
     operatingMode: "ONLINE",
+    clusterName: "Baltic Eastern Array",
     locationName: "Baltic Eastern Array (Gdańsk Bay)",
   },
   {
@@ -85,6 +93,7 @@ export const INITIAL_ASSETS: AssetInfo[] = [
     lat: 54.86,
     lng: 19.12,
     operatingMode: "ONLINE",
+    clusterName: "Baltic Eastern Array",
     locationName: "Baltic Eastern Array (Gdańsk Bay)",
   },
   {
@@ -94,6 +103,7 @@ export const INITIAL_ASSETS: AssetInfo[] = [
     lat: 54.83,
     lng: 19.19,
     operatingMode: "OFFLINE",
+    clusterName: "Baltic Eastern Array",
     locationName: "Baltic Eastern Array (Gdańsk Bay)",
   },
 ];
