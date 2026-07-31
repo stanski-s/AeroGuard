@@ -66,7 +66,7 @@ public class TelemetryPipeline {
     private static final String S3_ACCESS_KEY = System.getenv().getOrDefault("S3_ACCESS_KEY", "minioadmin");
     private static final String S3_SECRET_KEY = System.getenv().getOrDefault("S3_SECRET_KEY", "minioadmin");
     private static final String S3_BUCKET = System.getenv().getOrDefault("S3_BUCKET", "aeroguard-telemetry");
-    private static final String S3_PATH = System.getenv().getOrDefault("S3_PATH", "file:///tmp/aeroguard-telemetry/raw");
+    private static final String S3_PATH = System.getenv().getOrDefault("S3_PATH", "s3a://" + S3_BUCKET + "/raw");
 
     public static final OutputTag<String> DLQ_TAG = new OutputTag<>("telemetry-dlq", Types.STRING);
 
@@ -94,6 +94,8 @@ public class TelemetryPipeline {
 
         System.setProperty("HADOOP_USER_NAME", "minioadmin");
         Configuration flinkConfig = new Configuration();
+        flinkConfig.setString("metrics.reporter.prom.factory.class", "org.apache.flink.metrics.prometheus.PrometheusReporterFactory");
+        flinkConfig.setString("metrics.reporter.prom.port", System.getenv().getOrDefault("PROMETHEUS_REPORTER_PORT", "9249"));
         flinkConfig.setString("security.delegation.token.provider.hadoopfs.enabled", "false");
         flinkConfig.setString("security.delegation.token.provider.hbase.enabled", "false");
         flinkConfig.setString("fs.s3a.endpoint", S3_ENDPOINT);
