@@ -17,7 +17,7 @@ export function ClusterOverviewCard() {
       if (asset.operatingMode === "OFFLINE") return sum;
       const history = telemetryHistory[asset.id];
       const latest = history && history.length > 0 ? history[history.length - 1] : null;
-      const power = latest?.powerOutputMw ?? asset.powerOutputMw ?? (asset.operatingMode === "ONLINE" ? 12.5 : 2.1);
+      const power = latest?.powerOutputMw ?? 0;
       return sum + power;
     }, 0).toFixed(1);
   }, [assets, telemetryHistory]);
@@ -56,9 +56,9 @@ export function ClusterOverviewCard() {
         <div>
           <h2 className="font-bold text-sm text-[#002a58] flex items-center gap-1.5 font-sans">
             <Zap className="h-4 w-4 text-[#006a6a]" />
-            Cluster Alpha-9
+            Baltic Offshore Fleet
           </h2>
-          <p className="font-mono text-[10px] text-[#424750] uppercase mt-0.5">Dogger Bank Sector 4</p>
+          <p className="font-mono text-[10px] text-[#424750] uppercase mt-0.5">Pomerania • Słupsk • Gdańsk Bay</p>
         </div>
         <div className={`flex items-center gap-1 px-2 py-0.5 rounded border ${
           isConnected

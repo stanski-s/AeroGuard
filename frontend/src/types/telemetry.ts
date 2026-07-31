@@ -9,7 +9,7 @@ export interface TelemetryPoint {
   timestamp: string;
 }
 
-export type OperatingMode = "ONLINE" | "MAINTENANCE_MODE" | "DEGRADED" | "OFFLINE";
+export type OperatingMode = "ONLINE" | "MAINTENANCE_MODE" | "OFFLINE";
 export type DiagnosticAction = "LOCK_BRAKES" | "DERATE_POWER" | "RECALIBRATE_PITCH" | "DISPATCH_TECH";
 
 export interface AssetInfo {

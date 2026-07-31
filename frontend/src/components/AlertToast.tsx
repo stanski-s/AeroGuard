@@ -33,7 +33,7 @@ export const AlertToast: React.FC<AlertToastProps> = ({ alert, onDismiss }) => {
               </span>
             </div>
             <h4 className="mt-0.5 text-sm font-semibold text-slate-100">
-              Thermal Breach Detected
+              {alert.message || "Thermal Breach Detected"}
             </h4>
           </div>
         </div>

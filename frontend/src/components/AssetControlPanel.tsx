@@ -9,7 +9,6 @@ import { getAssetOperatingStatus, countAssetsByOperatingMode } from "@/utils/ass
 const OPERATING_MODES: { value: OperatingMode; label: string }[] = [
   { value: "ONLINE", label: "ONLINE" },
   { value: "MAINTENANCE_MODE", label: "MAINT" },
-  { value: "DEGRADED", label: "DEGRADED" },
   { value: "OFFLINE", label: "OFFLINE" },
 ];
 
@@ -20,7 +19,7 @@ export function AssetControlPanel() {
   const setSelectedAssetId = useTelemetryStore((state) => state.setSelectedAssetId);
   const updateAssetOperatingMode = useTelemetryStore((state) => state.updateAssetOperatingMode);
 
-  const { online, maintenance, degraded, offline } = countAssetsByOperatingMode(assets);
+  const { online, maintenance, offline } = countAssetsByOperatingMode(assets);
 
   const handleModeChange = (assetId: string, mode: OperatingMode) => {
     updateAssetOperatingMode(assetId, mode);
@@ -47,10 +46,6 @@ export function AssetControlPanel() {
           <span className="flex items-center gap-1 px-2.5 py-1 rounded bg-[#eff4ff] border border-[#c3c6d2]">
             <span className="h-2 w-2 rounded-full bg-amber-500"></span>
             Maint: {maintenance}
-          </span>
-          <span className="flex items-center gap-1 px-2.5 py-1 rounded bg-[#eff4ff] border border-[#c3c6d2]">
-            <span className="h-2 w-2 rounded-full bg-orange-500"></span>
-            Degraded: {degraded}
           </span>
           <span className="flex items-center gap-1 px-2.5 py-1 rounded bg-[#eff4ff] border border-[#c3c6d2]">
             <span className="h-2 w-2 rounded-full bg-[#737781]"></span>

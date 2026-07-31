@@ -42,19 +42,28 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
         return state;
       }
 
-      // Automatically sync telemetry history with alert's spike point to prevent graph/alert mismatch
+      // Suppress alerts for assets in MAINTENANCE_MODE
+      const targetAsset = state.assets.find((a) => a.id === alert.asset_id);
+      if (targetAsset?.operatingMode === "MAINTENANCE_MODE") {
+        console.log(`[Alert Suppressed] Asset ${alert.asset_id} is in MAINTENANCE_MODE`);
+        return state;
+      }
+
+      // Sync telemetry history with alert's real contextual telemetry fields if present
+      const existingHistory = state.telemetryHistory[alert.asset_id] || [];
+      const latestKnown = existingHistory.length > 0 ? existingHistory[existingHistory.length - 1] : null;
+
       const spikePoint: TelemetryPoint = {
         asset_id: alert.asset_id,
-        temperature: alert.temperature,
-        vibration: 0.28,
-        powerOutputMw: 12.4,
-        pitchAngleDeg: 4.2,
-        rotorSpeedRpm: 7.2,
-        nacelleTempC: alert.temperature > 80 ? 48.2 : 38.5,
+        temperature: alert.temperature ?? latestKnown?.temperature ?? 0,
+        vibration: alert.vibration ?? latestKnown?.vibration ?? 0,
+        powerOutputMw: alert.powerOutputMw ?? latestKnown?.powerOutputMw,
+        pitchAngleDeg: alert.pitchAngleDeg ?? latestKnown?.pitchAngleDeg,
+        rotorSpeedRpm: alert.rotorSpeedRpm ?? latestKnown?.rotorSpeedRpm,
+        nacelleTempC: alert.nacelleTempC ?? latestKnown?.nacelleTempC,
         timestamp: alert.timestamp || new Date().toISOString(),
       };
 
-      const existingHistory = state.telemetryHistory[alert.asset_id] || [];
       const updatedHistory = [...existingHistory, spikePoint].slice(-MAX_POINTS_PER_ASSET);
 
       return {
@@ -76,14 +85,17 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
   setSelectedAssetId: (assetId) => set({ selectedAssetId: assetId }),
 
   updateAssetOperatingMode: (assetId, mode) => {
-    // 1. Update local state
+    const previousAsset = get().assets.find((a) => a.id === assetId);
+    const previousMode = previousAsset?.operatingMode;
+
+    // 1. Optimistic update
     set((state) => ({
       assets: state.assets.map((asset) =>
         asset.id === assetId ? { ...asset, operatingMode: mode } : asset
       ),
     }));
 
-    // 2. Publish event to Kafka events.status via Gateway REST API
+    // 2. Publish event to Kafka events.status via Gateway REST API with rollback on error
     fetch(`${GATEWAY_URL}/api/assets/${assetId}/operating-mode?mode=${mode}`, {
       method: "POST",
     })
@@ -92,7 +104,14 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
         console.log(`[Operating Mode Kafka Event] Successfully updated ${assetId} to ${mode}`, data);
       })
       .catch((err) => {
-        console.warn(`[Operating Mode Kafka Event] Gateway request failed (using local state fallback):`, err);
+        console.warn(`[Operating Mode Kafka Event] Gateway request failed, rolling back to ${previousMode}:`, err);
+        if (previousMode) {
+          set((state) => ({
+            assets: state.assets.map((asset) =>
+              asset.id === assetId ? { ...asset, operatingMode: previousMode } : asset
+            ),
+          }));
+        }
       });
   },
 

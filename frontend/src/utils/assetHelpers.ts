@@ -9,7 +9,6 @@ export interface AssetOperatingModeDisplay {
   hexTextColor: string;
   isAlerting: boolean;
   isMaintenance: boolean;
-  isDegraded: boolean;
   isOffline: boolean;
 }
 
@@ -29,7 +28,6 @@ export function getAssetOperatingModeDisplay(
       hexTextColor: "#ffffff",
       isAlerting: true,
       isMaintenance: false,
-      isDegraded: false,
       isOffline: false,
     };
   }
@@ -45,20 +43,6 @@ export function getAssetOperatingModeDisplay(
         hexTextColor: "#ffffff",
         isAlerting: false,
         isMaintenance: true,
-        isDegraded: false,
-        isOffline: false,
-      };
-    case "DEGRADED":
-      return {
-        stateLabel: "DEGRADED",
-        badgeClass: "bg-orange-600 text-white font-bold border border-orange-300",
-        markerColorClass: "bg-orange-600 text-white font-extrabold shadow-md",
-        dotColorClass: "bg-white",
-        hexBgColor: "#ea580c",
-        hexTextColor: "#ffffff",
-        isAlerting: false,
-        isMaintenance: false,
-        isDegraded: true,
         isOffline: false,
       };
     case "OFFLINE":
@@ -71,7 +55,6 @@ export function getAssetOperatingModeDisplay(
         hexTextColor: "#ffffff",
         isAlerting: false,
         isMaintenance: false,
-        isDegraded: false,
         isOffline: true,
       };
     case "ONLINE":
@@ -85,7 +68,6 @@ export function getAssetOperatingModeDisplay(
         hexTextColor: "#ffffff",
         isAlerting: false,
         isMaintenance: false,
-        isDegraded: false,
         isOffline: false,
       };
   }
@@ -96,14 +78,11 @@ export const getAssetOperatingStatus = getAssetOperatingModeDisplay;
 export function countAssetsByOperatingMode(assets: AssetInfo[]) {
   let online = 0;
   let maintenance = 0;
-  let degraded = 0;
   let offline = 0;
 
   for (const asset of assets) {
     if (asset.operatingMode === "MAINTENANCE_MODE") {
       maintenance++;
-    } else if (asset.operatingMode === "DEGRADED") {
-      degraded++;
     } else if (asset.operatingMode === "OFFLINE") {
       offline++;
     } else {
@@ -111,5 +90,5 @@ export function countAssetsByOperatingMode(assets: AssetInfo[]) {
     }
   }
 
-  return { online, maintenance, degraded, offline, total: assets.length };
+  return { online, maintenance, offline, total: assets.length };
 }

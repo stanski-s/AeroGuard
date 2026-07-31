@@ -20,6 +20,7 @@ export function AssetDetailPanel() {
   const telemetryHistory = useTelemetryStore((state) => state.telemetryHistory);
   const isConnected = useTelemetryStore((state) => state.isConnected);
   const setSelectedAssetId = useTelemetryStore((state) => state.setSelectedAssetId);
+  const updateAssetOperatingMode = useTelemetryStore((state) => state.updateAssetOperatingMode);
   const triggerDiagnosticAction = useTelemetryStore((state) => state.triggerDiagnosticAction);
 
   const [lastActionStatus, setLastActionStatus] = useState<string | null>(null);
@@ -32,24 +33,34 @@ export function AssetDetailPanel() {
   const latestPoint = assetHistory[assetHistory.length - 1];
   const hasData = Boolean(latestPoint);
 
-  // Physical telemetry parameters from real stream
+  // Physical telemetry parameters from real stream (FIXED MAPPING)
   const powerOutputMw = latestPoint?.powerOutputMw;
   const rotorSpeedRpm = latestPoint?.rotorSpeedRpm;
   const pitchAngleDeg = latestPoint?.pitchAngleDeg;
-  const nacelleTempC = latestPoint?.temperature;
+  const generatorTempC = latestPoint?.temperature;
+  const nacelleTempC = latestPoint?.nacelleTempC;
   const vibrationVal = latestPoint?.vibration;
   const vibrationPct = vibrationVal !== undefined ? Math.min(100, Math.round((vibrationVal / 0.50) * 100)) : 0;
+  const timestampFormatted = latestPoint?.timestamp ? new Date(latestPoint.timestamp).toLocaleTimeString() : null;
 
   // Rule-based Diagnostic Engine resolution
   let diagnosisTitle = "Subsystems operating within nominal dynamic thresholds.";
   let diagnosisDetail = "No action required. Continuous telemetry stream active.";
   let priorityLabel = "Nominal";
 
-  if (!hasData) {
+  if (selectedAsset.operatingMode === "OFFLINE") {
+    diagnosisTitle = "Asset Offline";
+    diagnosisDetail = "Turbine is shut down. No power generation or active telemetry alerts.";
+    priorityLabel = "Offline";
+  } else if (!hasData) {
     diagnosisTitle = isConnected
       ? "Awaiting incoming telemetry stream frame from Kafka."
       : "WebSocket Gateway disconnected. Telemetry stream offline.";
-    priorityLabel = "Offline";
+    priorityLabel = "No Stream";
+  } else if (selectedAsset.operatingMode === "MAINTENANCE_MODE") {
+    diagnosisTitle = "Asset in Maintenance Mode";
+    diagnosisDetail = "Scheduled testing operations active. Anomaly alerts suppressed.";
+    priorityLabel = "Maintenance";
   } else if (activeAlert?.diagnostic_action) {
     diagnosisTitle = `Action: ${activeAlert.diagnostic_action.title}`;
     diagnosisDetail = activeAlert.diagnostic_action.description;
@@ -62,10 +73,6 @@ export function AssetDetailPanel() {
     diagnosisTitle = "Elevated Mechanical Vibration Detected";
     diagnosisDetail = "Drive train vibration threshold exceeded. Check mechanical alignment.";
     priorityLabel = "Warning";
-  } else if (selectedAsset.operatingMode === "MAINTENANCE_MODE") {
-    diagnosisTitle = "Asset in Maintenance Mode";
-    diagnosisDetail = "Testing operations active. Telemetry alerts suppressed.";
-    priorityLabel = "Maintenance";
   }
 
   const handleActionClick = async (action: string) => {
@@ -76,58 +83,96 @@ export function AssetDetailPanel() {
   };
 
   return (
-    <div className="bg-white/95 backdrop-blur-lg border border-[#c3c6d2] rounded-lg shadow-xl w-[420px] overflow-hidden text-xs">
+    <div className="bg-white/95 backdrop-blur-lg border border-[#c3c6d2] rounded-lg shadow-xl w-[440px] overflow-hidden text-xs">
       {/* Panel Header */}
       <div className="bg-[#eff4ff] px-4 py-3 flex justify-between items-center border-b border-[#c3c6d2]">
         <div className="flex items-center gap-2">
           <Wind className="h-5 w-5 text-[#004080]" />
-          <span className="font-bold text-sm uppercase tracking-wider text-[#004080]">
-            UNIT {selectedAsset.name}
-          </span>
+          <div>
+            <span className="font-bold text-sm uppercase tracking-wider text-[#004080] block">
+              {selectedAsset.name}
+            </span>
+            <span className="text-[10px] font-mono text-[#424750] block">
+              {selectedAsset.id} • {selectedAsset.clusterName || selectedAsset.locationName}
+            </span>
+          </div>
         </div>
-        <button
-          onClick={() => setSelectedAssetId(null)}
-          className="p-1 hover:bg-[#dce9ff] rounded transition-colors text-[#424750]"
-          title="Close details"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Operating Mode Selector Badge */}
+          <select
+            value={selectedAsset.operatingMode}
+            onChange={(e) => updateAssetOperatingMode(selectedAsset.id, e.target.value as any)}
+            className={`text-[10px] font-mono font-bold px-2 py-1 rounded border cursor-pointer outline-none ${
+              selectedAsset.operatingMode === "ONLINE"
+                ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                : selectedAsset.operatingMode === "MAINTENANCE_MODE"
+                ? "bg-amber-100 text-amber-800 border-amber-300"
+                : "bg-slate-100 text-slate-700 border-slate-300"
+            }`}
+          >
+            <option value="ONLINE">ONLINE</option>
+            <option value="MAINTENANCE_MODE">MAINT</option>
+            <option value="OFFLINE">OFFLINE</option>
+          </select>
+          <button
+            onClick={() => setSelectedAssetId(null)}
+            className="p-1 hover:bg-[#dce9ff] rounded transition-colors text-[#424750]"
+            title="Close details"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
-      {/* Telemetry Metrics Grid */}
-      <div className="p-4 grid grid-cols-2 gap-3 font-mono">
-        <div className="bg-[#eff4ff] p-3 border border-[#c3c6d2]/60 rounded">
-          <p className="text-[10px] text-[#424750] font-bold uppercase">Power Output</p>
-          <p className="text-lg text-[#002a58] font-bold">
+      {/* Location Subheader & Last Frame Timestamp */}
+      <div className="px-4 py-1.5 bg-[#f8f9ff] border-b border-[#c3c6d2]/50 flex justify-between items-center font-mono text-[10px] text-[#424750]">
+        <span>Location: <strong className="text-[#002a58]">{selectedAsset.locationName}</strong></span>
+        <span>Last Frame: <strong className="text-[#002a58]">{timestampFormatted || "N/A"}</strong></span>
+      </div>
+
+      {/* Telemetry Metrics Grid (5 Physical Metrics) */}
+      <div className="p-4 grid grid-cols-3 gap-2.5 font-mono">
+        <div className="bg-[#eff4ff] p-2.5 border border-[#c3c6d2]/60 rounded">
+          <p className="text-[9px] text-[#424750] font-bold uppercase">Power Output</p>
+          <p className="text-base text-[#002a58] font-bold mt-0.5">
             {hasData && powerOutputMw !== undefined ? `${powerOutputMw.toFixed(1)} MW` : (
-              <span className="text-xs text-[#737781] italic">NO CONNECTION</span>
+              <span className="text-[10px] text-[#737781] italic">NO STREAM</span>
             )}
           </p>
         </div>
 
-        <div className="bg-[#eff4ff] p-3 border border-[#c3c6d2]/60 rounded">
-          <p className="text-[10px] text-[#424750] font-bold uppercase">Rotor Speed</p>
-          <p className="text-lg text-[#002a58] font-bold">
+        <div className="bg-[#eff4ff] p-2.5 border border-[#c3c6d2]/60 rounded">
+          <p className="text-[9px] text-[#424750] font-bold uppercase">Rotor Speed</p>
+          <p className="text-base text-[#002a58] font-bold mt-0.5">
             {hasData && rotorSpeedRpm !== undefined ? `${rotorSpeedRpm.toFixed(1)} RPM` : (
-              <span className="text-xs text-[#737781] italic">NO CONNECTION</span>
+              <span className="text-[10px] text-[#737781] italic">NO STREAM</span>
             )}
           </p>
         </div>
 
-        <div className="bg-[#eff4ff] p-3 border border-[#c3c6d2]/60 rounded">
-          <p className="text-[10px] text-[#424750] font-bold uppercase">Pitch Angle</p>
-          <p className="text-lg text-[#002a58] font-bold">
+        <div className="bg-[#eff4ff] p-2.5 border border-[#c3c6d2]/60 rounded">
+          <p className="text-[9px] text-[#424750] font-bold uppercase">Pitch Angle</p>
+          <p className="text-base text-[#002a58] font-bold mt-0.5">
             {hasData && pitchAngleDeg !== undefined ? `${pitchAngleDeg.toFixed(1)}°` : (
-              <span className="text-xs text-[#737781] italic">NO CONNECTION</span>
+              <span className="text-[10px] text-[#737781] italic">NO STREAM</span>
             )}
           </p>
         </div>
 
-        <div className="bg-[#eff4ff] p-3 border border-[#c3c6d2]/60 rounded">
-          <p className="text-[10px] text-[#424750] font-bold uppercase">Nacelle Temp</p>
-          <p className={`text-lg font-bold ${nacelleTempC && nacelleTempC > 80 ? "text-[#ba1a1a]" : "text-[#002a58]"}`}>
+        <div className="bg-[#eff4ff] p-2.5 border border-[#c3c6d2]/60 rounded">
+          <p className="text-[9px] text-[#424750] font-bold uppercase">Generator Temp</p>
+          <p className={`text-base font-bold mt-0.5 ${generatorTempC && generatorTempC > 80 ? "text-[#ba1a1a]" : "text-[#002a58]"}`}>
+            {hasData && generatorTempC !== undefined ? `${generatorTempC.toFixed(1)}°C` : (
+              <span className="text-[10px] text-[#737781] italic">NO STREAM</span>
+            )}
+          </p>
+        </div>
+
+        <div className="bg-[#eff4ff] p-2.5 border border-[#c3c6d2]/60 rounded col-span-2">
+          <p className="text-[9px] text-[#424750] font-bold uppercase">Nacelle Temp</p>
+          <p className="text-base text-[#002a58] font-bold mt-0.5">
             {hasData && nacelleTempC !== undefined ? `${nacelleTempC.toFixed(1)}°C` : (
-              <span className="text-xs text-[#737781] italic">NO CONNECTION</span>
+              <span className="text-[10px] text-[#737781] italic">NO STREAM</span>
             )}
           </p>
         </div>
@@ -138,7 +183,7 @@ export function AssetDetailPanel() {
         <div className="flex justify-between font-mono text-[10px] font-bold uppercase">
           <span className="text-[#424750]">Vibration Threshold</span>
           <span className={!hasData ? "text-[#737781]" : vibrationPct > 70 ? "text-[#ba1a1a]" : "text-[#006a6a]"}>
-            {!hasData ? "NO CONNECTION" : vibrationPct > 70 ? `EXCEEDED (${vibrationPct}%)` : `NOMINAL (${vibrationPct}%)`}
+            {!hasData ? "NO STREAM" : vibrationPct > 70 ? `EXCEEDED (${vibrationPct}%)` : `NOMINAL (${vibrationPct}%)`}
           </span>
         </div>
         <div className="h-2 w-full bg-[#dce9ff] rounded-full overflow-hidden">

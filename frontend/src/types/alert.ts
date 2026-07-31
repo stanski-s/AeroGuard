@@ -18,5 +18,10 @@ export interface CriticalAlert {
   threshold: number;
   timestamp: string;
   message: string;
+  vibration?: number;
+  powerOutputMw?: number;
+  pitchAngleDeg?: number;
+  rotorSpeedRpm?: number;
+  nacelleTempC?: number;
   diagnostic_action?: DiagnosticAction;
 }

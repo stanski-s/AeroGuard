@@ -45,7 +45,7 @@ export default function AnalyticsPage() {
       return {
         id: asset.id,
         name: asset.name,
-        clusterName: asset.clusterName || "Dogger Bank Alpha",
+        clusterName: asset.clusterName || "Baltic Array",
         locationName: asset.locationName,
         lat: asset.lat,
         lng: asset.lng,
@@ -206,8 +206,6 @@ export default function AnalyticsPage() {
                         ? "bg-[#90efef]/20 text-[#006a6a] border border-[#006a6a]/30"
                         : item.mode === "MAINTENANCE_MODE"
                         ? "bg-amber-100 text-amber-800 border border-amber-300"
-                        : item.mode === "DEGRADED"
-                        ? "bg-orange-100 text-orange-800 border border-orange-300"
                         : "bg-slate-100 text-slate-700 border border-slate-300"
                     }`}>
                       {item.mode}

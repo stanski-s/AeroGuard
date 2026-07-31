@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React from "react";
 import dynamic from "next/dynamic";
 import { useTelemetryStream } from "@/hooks/useAlertWebSocket";
 import { useTelemetryStore } from "@/store/useTelemetryStore";
@@ -9,8 +9,6 @@ import { KPICards } from "@/components/KPICards";
 import { AlertsTable } from "@/components/AlertsTable";
 import { AssetDetailPanel } from "@/components/AssetDetailPanel";
 import { AlertToastContainer } from "@/components/AlertToastContainer";
-import { startTelemetrySimulation, stopTelemetrySimulation } from "@/utils/telemetrySimulator";
-import { Flame } from "lucide-react";
 
 // Dynamic import for MapLibre component to prevent SSR window issues
 const AssetMap = dynamic(
@@ -28,19 +26,6 @@ const AssetMap = dynamic(
 export default function FleetMapPage() {
   const { alerts, isConnected, dismissAlert } = useTelemetryStream();
   const selectedAssetId = useTelemetryStore((state) => state.selectedAssetId);
-  const triggerThermalSpike = useTelemetryStore((state) => state.triggerThermalSpike);
-
-  useEffect(() => {
-    startTelemetrySimulation();
-    return () => {
-      stopTelemetrySimulation();
-    };
-  }, []);
-
-  const handleSimulateAlert = () => {
-    triggerThermalSpike(selectedAssetId || "BAL-WTG-001", 88.5);
-  };
-
   return (
     <div className="pt-16 pb-16 ml-[64px] min-h-screen bg-[#f8f9ff] text-[#0d1c2e] p-6 space-y-6">
       {/* Top Banner Action Row */}
@@ -52,16 +37,6 @@ export default function FleetMapPage() {
           <p className="text-xs text-[#424750] font-mono">
             Spatial Field View • Baltic Coast Arrays (West • Central • East)
           </p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleSimulateAlert}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded bg-[#ba1a1a] hover:bg-[#93000a] text-white font-mono text-xs font-bold uppercase transition-all shadow-sm active:scale-95"
-          >
-            <Flame className="h-4 w-4" />
-            Trigger Kafka Thermal Spike
-          </button>
         </div>
       </div>
 

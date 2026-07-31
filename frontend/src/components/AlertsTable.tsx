@@ -50,6 +50,7 @@ export function AlertsTable() {
                 <th className="px-6 py-3">Alert ID</th>
                 <th className="px-6 py-3">Asset ID</th>
                 <th className="px-6 py-3">Alert Type</th>
+                <th className="px-6 py-3">Message &amp; Context</th>
                 <th className="px-6 py-3">Temp / Thresh</th>
                 <th className="px-6 py-3">Diagnostic Action</th>
                 <th className="px-6 py-3">Timestamp</th>
@@ -74,6 +75,18 @@ export function AlertsTable() {
                       <Flame className="h-3 w-3" />
                       {alert.alert_type}
                     </span>
+                  </td>
+                  <td className="px-6 py-3 text-[#424750]">
+                    <div className="font-sans text-xs font-semibold text-[#0d1c2e]">
+                      {alert.message || "Thermal threshold breached"}
+                    </div>
+                    {(alert.powerOutputMw !== undefined || alert.vibration !== undefined) && (
+                      <div className="text-[10px] text-[#737781] font-mono mt-0.5">
+                        {alert.powerOutputMw !== undefined && `${alert.powerOutputMw.toFixed(1)} MW • `}
+                        {alert.vibration !== undefined && `Vib: ${alert.vibration.toFixed(2)}g • `}
+                        {alert.rotorSpeedRpm !== undefined && `${alert.rotorSpeedRpm.toFixed(1)} RPM`}
+                      </div>
+                    )}
                   </td>
                   <td className="px-6 py-3 text-[#ba1a1a] font-bold">
                     {formatTemperature(alert.temperature)} / <span className="text-[#737781] font-normal">{formatTemperature(alert.threshold)}</span>

@@ -5,7 +5,7 @@ import * as echarts from "echarts";
 import { useTelemetryStore } from "@/store/useTelemetryStore";
 import { Activity, Flame, AlertTriangle } from "lucide-react";
 
-type MetricMode = "temperature" | "vibration" | "powerOutputMw" | "rotorSpeedRpm" | "pitchAngleDeg";
+type MetricMode = "temperature" | "nacelleTempC" | "vibration" | "powerOutputMw" | "rotorSpeedRpm" | "pitchAngleDeg";
 
 export function TelemetryChart() {
   const chartRef = useRef<HTMLDivElement>(null);
@@ -65,20 +65,22 @@ export function TelemetryChart() {
       switch (metricMode) {
         case "temperature":
           return p.temperature;
+        case "nacelleTempC":
+          return p.nacelleTempC ?? null;
         case "vibration":
           return p.vibration;
         case "powerOutputMw":
-          return p.powerOutputMw ?? selectedAsset?.powerOutputMw ?? 12.5;
+          return p.powerOutputMw ?? null;
         case "rotorSpeedRpm":
-          return p.rotorSpeedRpm ?? selectedAsset?.rotorSpeedRpm ?? 7.5;
+          return p.rotorSpeedRpm ?? null;
         case "pitchAngleDeg":
-          return p.pitchAngleDeg ?? selectedAsset?.pitchAngleDeg ?? 4.2;
+          return p.pitchAngleDeg ?? null;
       }
     });
 
     const isTempMode = metricMode === "temperature";
     const thresholdVal = isTempMode ? 80.0 : metricMode === "vibration" ? 0.35 : null;
-    const hasSpike = isTempMode && dataValues.some((v) => v > 80.0);
+    const hasSpike = isTempMode && dataValues.some((v) => v !== null && v > 80.0);
 
     const lineColor = isTempMode
       ? hasSpike
@@ -91,6 +93,7 @@ export function TelemetryChart() {
     const getUnit = () => {
       switch (metricMode) {
         case "temperature": return "°C";
+        case "nacelleTempC": return "°C";
         case "vibration": return " g";
         case "powerOutputMw": return " MW";
         case "rotorSpeedRpm": return " RPM";
@@ -101,6 +104,7 @@ export function TelemetryChart() {
     const getMetricName = () => {
       switch (metricMode) {
         case "temperature": return "Generator Temp";
+        case "nacelleTempC": return "Nacelle Temp";
         case "vibration": return "Vibration Level";
         case "powerOutputMw": return "Power Output";
         case "rotorSpeedRpm": return "Rotor Speed";
@@ -120,6 +124,7 @@ export function TelemetryChart() {
           const p = params[0];
           const unit = getUnit();
           const val = p.value;
+          if (val === null || val === undefined) return `<div>No data</div>`;
           const conditionText =
             thresholdVal && val > thresholdVal
               ? "<span style='color:#ba1a1a;font-weight:bold;'>CRITICAL BREACH</span>"
@@ -210,10 +215,11 @@ export function TelemetryChart() {
     if (!latestPoint) return "--";
     switch (metricMode) {
       case "temperature": return `${latestPoint.temperature.toFixed(1)}°C`;
+      case "nacelleTempC": return latestPoint.nacelleTempC !== undefined ? `${latestPoint.nacelleTempC.toFixed(1)}°C` : "--";
       case "vibration": return `${latestPoint.vibration.toFixed(3)}g`;
-      case "powerOutputMw": return `${(latestPoint.powerOutputMw ?? 12.5).toFixed(1)} MW`;
-      case "rotorSpeedRpm": return `${(latestPoint.rotorSpeedRpm ?? 7.5).toFixed(1)} RPM`;
-      case "pitchAngleDeg": return `${(latestPoint.pitchAngleDeg ?? 4.2).toFixed(1)}°`;
+      case "powerOutputMw": return latestPoint.powerOutputMw !== undefined ? `${latestPoint.powerOutputMw.toFixed(1)} MW` : "--";
+      case "rotorSpeedRpm": return latestPoint.rotorSpeedRpm !== undefined ? `${latestPoint.rotorSpeedRpm.toFixed(1)} RPM` : "--";
+      case "pitchAngleDeg": return latestPoint.pitchAngleDeg !== undefined ? `${latestPoint.pitchAngleDeg.toFixed(1)}°` : "--";
     }
   };
 
@@ -263,7 +269,17 @@ export function TelemetryChart() {
                   : "text-[#424750] hover:text-[#002a58]"
               }`}
             >
-              Temp
+              Gen Temp
+            </button>
+            <button
+              onClick={() => setMetricMode("nacelleTempC")}
+              className={`px-2 py-1 rounded transition-colors ${
+                metricMode === "nacelleTempC"
+                  ? "bg-[#004080] text-white font-bold"
+                  : "text-[#424750] hover:text-[#002a58]"
+              }`}
+            >
+              Nacelle Temp
             </button>
             <button
               onClick={() => setMetricMode("vibration")}
@@ -332,14 +348,21 @@ export function TelemetryChart() {
       <div className="relative flex-1 w-full mt-2">
         <div ref={chartRef} className="absolute inset-0 w-full h-full" />
 
-        {historyPoints.length === 0 && (
+        {selectedAsset?.operatingMode === "OFFLINE" ? (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm rounded-lg p-6 text-center border border-[#c3c6d2]">
+            <AlertTriangle className="h-6 w-6 text-slate-500 mb-2" />
+            <h4 className="text-xs font-bold text-slate-700 font-mono uppercase">
+              ASSET OFFLINE — TELEMETRY STREAM SUSPENDED
+            </h4>
+          </div>
+        ) : historyPoints.length === 0 ? (
           <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm rounded-lg p-6 text-center border border-[#c3c6d2]">
             <AlertTriangle className="h-6 w-6 text-[#ba1a1a] animate-pulse mb-2" />
             <h4 className="text-xs font-bold text-[#ba1a1a] font-mono">
               {isConnected ? "WAITING FOR KAFKA TELEMETRY STREAM" : "WEBSOCKET GATEWAY DISCONNECTED"}
             </h4>
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* Footer Info */}
