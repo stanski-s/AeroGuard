@@ -120,10 +120,10 @@ public class TelemetrySimulator {
 
             double formattedTemp = Math.round(temperature * 100.0) / 100.0;
             double formattedVib = Math.round(vibration * 1000.0) / 1000.0;
-            double formattedPower = Math.round(powerOutputMw * 10.0) / 10.0;
-            double formattedPitch = Math.round(pitchAngleDeg * 10.0) / 10.0;
-            double formattedRpm = Math.round(rotorSpeedRpm * 10.0) / 10.0;
-            double formattedNacelle = Math.round(nacelleTempC * 10.0) / 10.0;
+            double formattedPower = Math.round(powerOutputMw * 100.0) / 100.0;
+            double formattedPitch = Math.round(pitchAngleDeg * 100.0) / 100.0;
+            double formattedRpm = Math.round(rotorSpeedRpm * 100.0) / 100.0;
+            double formattedNacelle = Math.round(nacelleTempC * 100.0) / 100.0;
 
             return new Telemetry(
                     assetId, Instant.now(), formattedVib, formattedTemp,
@@ -162,10 +162,10 @@ public class TelemetrySimulator {
         double formattedTemp = Math.round(curTemp * 100.0) / 100.0;
         double formattedVib = Math.round(vibration * 1000.0) / 1000.0;
 
-        double powerOutputMw = Math.round((11.8 + random.nextDouble() * 2.4) * 10.0) / 10.0;
-        double pitchAngleDeg = Math.round((3.8 + random.nextDouble() * 1.2) * 10.0) / 10.0;
-        double rotorSpeedRpm = Math.round((6.8 + random.nextDouble() * 1.4) * 10.0) / 10.0;
-        double nacelleTempC = Math.round((34.0 + random.nextDouble() * 8.0) * 10.0) / 10.0;
+        double powerOutputMw = Math.round((11.8 + random.nextDouble() * 2.4) * 100.0) / 100.0;
+        double pitchAngleDeg = Math.round((3.8 + random.nextDouble() * 1.2) * 100.0) / 100.0;
+        double rotorSpeedRpm = Math.round((6.8 + random.nextDouble() * 1.4) * 100.0) / 100.0;
+        double nacelleTempC = Math.round((34.0 + random.nextDouble() * 8.0) * 100.0) / 100.0;
 
         return new Telemetry(
                 assetId, Instant.now(), formattedVib, formattedTemp,
@@ -184,7 +184,21 @@ public class TelemetrySimulator {
 
         TelemetrySimulator simulator = new TelemetrySimulator();
 
-        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
+        KafkaProducer<String, String> producer = new KafkaProducer<>(props);
+        final Thread mainThread = Thread.currentThread();
+
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            logger.info("Shutting down TelemetrySimulator gracefully...");
+            mainThread.interrupt();
+            try {
+                producer.flush();
+                producer.close();
+            } catch (Exception e) {
+                logger.error("Error during KafkaProducer shutdown", e);
+            }
+        }));
+
+        try {
             logger.info("Starting AeroGuard telemetry simulator. Sending {} messages per second to {}", MESSAGES_PER_SECOND, TOPIC);
             long sleepTimeMs = Math.max(100, 1000 / MESSAGES_PER_SECOND);
             int stepCounter = 0;
@@ -223,6 +237,13 @@ public class TelemetrySimulator {
                     Thread.currentThread().interrupt();
                     break;
                 }
+            }
+        } finally {
+            try {
+                producer.flush();
+                producer.close();
+            } catch (Exception e) {
+                // Ignore if already closed by shutdown hook
             }
         }
     }

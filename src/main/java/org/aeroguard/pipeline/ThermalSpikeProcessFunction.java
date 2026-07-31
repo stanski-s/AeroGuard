@@ -46,6 +46,10 @@ public class ThermalSpikeProcessFunction extends KeyedBroadcastProcessFunction<S
     private transient ValueState<Boolean> alertActiveState;
     private transient ValueState<String> operatingModeState;
 
+    private transient org.apache.flink.metrics.Counter telemetryEventsCounter;
+    private transient org.apache.flink.metrics.Counter alertsGeneratedCounter;
+    private transient org.apache.flink.metrics.Counter operatingModeEventsCounter;
+
     public ThermalSpikeProcessFunction(double defaultThreshold) {
         this(defaultThreshold, 5);
     }
@@ -68,6 +72,10 @@ public class ThermalSpikeProcessFunction extends KeyedBroadcastProcessFunction<S
         ValueStateDescriptor<String> operatingModeDescriptor =
                 new ValueStateDescriptor<>("operating-mode-state", Types.STRING);
         operatingModeState = getRuntimeContext().getState(operatingModeDescriptor);
+
+        this.telemetryEventsCounter = getRuntimeContext().getMetricGroup().counter("telemetry_events_processed");
+        this.alertsGeneratedCounter = getRuntimeContext().getMetricGroup().counter("alerts_generated");
+        this.operatingModeEventsCounter = getRuntimeContext().getMetricGroup().counter("operating_mode_events_processed");
     }
 
     @Override
@@ -77,19 +85,33 @@ public class ThermalSpikeProcessFunction extends KeyedBroadcastProcessFunction<S
         }
 
         if (event.getType() == AssetEvent.EventType.OPERATING_MODE) {
+            if (operatingModeEventsCounter != null) {
+                operatingModeEventsCounter.inc();
+            }
             AssetOperatingModeEvent modeEvent = event.getOperatingModeEvent();
             if (modeEvent != null && modeEvent.getOperatingMode() != null) {
                 operatingModeState.update(modeEvent.getOperatingMode());
                 if (OperatingMode.isMaintenanceMode(modeEvent.getOperatingMode())) {
                     alertActiveState.clear();
+                    recentTemperaturesState.clear();
                 }
             }
             return;
         }
 
         if (event.getType() == AssetEvent.EventType.TELEMETRY) {
+            if (telemetryEventsCounter != null) {
+                telemetryEventsCounter.inc();
+            }
             Telemetry value = event.getTelemetry();
             if (value == null) {
+                return;
+            }
+
+            String currentMode = operatingModeState.value();
+            if (OperatingMode.isMaintenanceMode(currentMode)) {
+                recentTemperaturesState.clear();
+                alertActiveState.clear();
                 return;
             }
 
@@ -106,11 +128,6 @@ public class ThermalSpikeProcessFunction extends KeyedBroadcastProcessFunction<S
                 recentTemperatures.remove(0);
             }
             recentTemperaturesState.update(recentTemperatures);
-
-            String currentMode = operatingModeState.value();
-            if (OperatingMode.isMaintenanceMode(currentMode)) {
-                return;
-            }
 
             double sum = 0.0;
             for (double t : recentTemperatures) {
@@ -166,6 +183,9 @@ public class ThermalSpikeProcessFunction extends KeyedBroadcastProcessFunction<S
                             action
                     );
                     out.collect(alert);
+                    if (alertsGeneratedCounter != null) {
+                        alertsGeneratedCounter.inc();
+                    }
                     alertActiveState.update(true);
                 }
             } else {

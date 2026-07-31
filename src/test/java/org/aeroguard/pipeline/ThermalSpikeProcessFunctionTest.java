@@ -179,7 +179,7 @@ class ThermalSpikeProcessFunctionTest {
         List<Alert> alerts = testHarness.extractOutputValues();
         assertEquals(1, alerts.size());
         assertEquals("turbine-11", alerts.get(0).getAssetId());
-        assertEquals(91.0, alerts.get(0).getTemperature(), 0.01);
+        assertEquals(92.0, alerts.get(0).getTemperature(), 0.01);
     }
 
     @Test

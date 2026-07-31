@@ -27,12 +27,17 @@ import org.apache.flink.connector.kafka.sink.KafkaSink;
 import org.apache.flink.connector.kafka.source.KafkaSource;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
 import org.apache.flink.formats.parquet.avro.ParquetAvroWriters;
+import org.apache.flink.api.common.typeinfo.Types;
 import org.apache.flink.streaming.api.datastream.BroadcastStream;
 import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.streaming.api.functions.sink.filesystem.bucketassigners.DateTimeBucketAssigner;
 import org.apache.flink.streaming.api.windowing.assigners.TumblingEventTimeWindows;
 import org.apache.flink.streaming.api.windowing.time.Time;
+import org.apache.flink.util.Collector;
+import org.apache.flink.util.OutputTag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,6 +53,7 @@ public class TelemetryPipeline {
     private static final Logger logger = LoggerFactory.getLogger(TelemetryPipeline.class);
     
     private static final String TOPIC = "telemetry.raw";
+    private static final String DLQ_TOPIC = "telemetry.dlq";
     private static final String THRESHOLD_TOPIC = "config.thresholds";
     private static final String DIAGNOSTIC_ACTIONS_TOPIC = "config.diagnostic-actions";
     private static final String OPERATING_MODE_TOPIC = "events.status";
@@ -62,11 +68,13 @@ public class TelemetryPipeline {
     private static final String S3_BUCKET = System.getenv().getOrDefault("S3_BUCKET", "aeroguard-telemetry");
     private static final String S3_PATH = System.getenv().getOrDefault("S3_PATH", "file:///tmp/aeroguard-telemetry/raw");
 
+    public static final OutputTag<String> DLQ_TAG = new OutputTag<>("telemetry-dlq", Types.STRING);
+
     private static void ensureTopicsExist() {
         Properties props = new Properties();
         props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA_BOOTSTRAP_SERVERS);
         try (AdminClient adminClient = AdminClient.create(props)) {
-            List<String> requiredTopics = List.of(TOPIC, THRESHOLD_TOPIC, DIAGNOSTIC_ACTIONS_TOPIC, OPERATING_MODE_TOPIC, ALERT_TOPIC);
+            List<String> requiredTopics = List.of(TOPIC, DLQ_TOPIC, THRESHOLD_TOPIC, DIAGNOSTIC_ACTIONS_TOPIC, OPERATING_MODE_TOPIC, ALERT_TOPIC);
             Set<String> existingTopics = adminClient.listTopics().names().get();
             List<NewTopic> newTopics = requiredTopics.stream()
                     .filter(t -> !existingTopics.contains(t))
@@ -98,7 +106,8 @@ public class TelemetryPipeline {
         org.apache.flink.core.fs.FileSystem.initialize(flinkConfig, null);
 
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment(flinkConfig);
-        env.enableCheckpointing(5000);
+        long checkpointInterval = Long.parseLong(System.getenv().getOrDefault("CHECKPOINT_INTERVAL_MS", "30000"));
+        env.enableCheckpointing(checkpointInterval);
 
         KafkaSource<String> source = KafkaSource.<String>builder()
                 .setBootstrapServers(KAFKA_BOOTSTRAP_SERVERS)
@@ -108,9 +117,26 @@ public class TelemetryPipeline {
                 .setValueOnlyDeserializer(new SimpleStringSchema())
                 .build();
 
-        DataStream<Telemetry> telemetryStream = env
+        SingleOutputStreamOperator<Telemetry> parsedTelemetryStream = env
                 .fromSource(source, WatermarkStrategy.noWatermarks(), "Kafka Telemetry Source")
-                .map(new TelemetryDeserializer())
+                .process(new TelemetryParsingProcessFunction())
+                .name("Parse Telemetry JSON with DLQ");
+
+        DataStream<String> dlqStream = parsedTelemetryStream.getSideOutput(DLQ_TAG);
+
+        KafkaSink<String> dlqKafkaSink = KafkaSink.<String>builder()
+                .setBootstrapServers(KAFKA_BOOTSTRAP_SERVERS)
+                .setRecordSerializer(
+                        KafkaRecordSerializationSchema.<String>builder()
+                                .setTopic(DLQ_TOPIC)
+                                .setValueSerializationSchema(new SimpleStringSchema())
+                                .build()
+                )
+                .build();
+
+        dlqStream.sinkTo(dlqKafkaSink).name("Telemetry → Kafka DLQ");
+
+        DataStream<Telemetry> telemetryStream = parsedTelemetryStream
                 .assignTimestampsAndWatermarks(
                         WatermarkStrategy.<Telemetry>forBoundedOutOfOrderness(Duration.ofSeconds(5))
                                 .withIdleness(Duration.ofSeconds(5))
@@ -178,9 +204,12 @@ public class TelemetryPipeline {
                         ThermalSpikeProcessFunction.DIAGNOSTIC_ACTION_STATE_DESCRIPTOR
                 );
 
+        long allowedLatenessSec = Long.parseLong(System.getenv().getOrDefault("ALLOWED_LATENESS_SECONDS", "10"));
+
         DataStream<AssetMetric> aggregatedStream = telemetryStream
                 .keyBy(Telemetry::getAssetId)
                 .window(TumblingEventTimeWindows.of(Time.minutes(1)))
+                .allowedLateness(Time.seconds(allowedLatenessSec))
                 .aggregate(new TelemetryAggregator());
 
         aggregatedStream.addSink(JdbcSink.sink(
@@ -275,6 +304,43 @@ public class TelemetryPipeline {
         ));
 
         env.execute("End-to-end Telemetry Ingestion");
+    }
+
+    public static class TelemetryParsingProcessFunction extends ProcessFunction<String, Telemetry> {
+        private transient ObjectMapper mapper;
+        private transient org.apache.flink.metrics.Counter successCounter;
+        private transient org.apache.flink.metrics.Counter malformedCounter;
+
+        @Override
+        public void open(Configuration parameters) throws Exception {
+            mapper = JsonMapperUtil.getMapper();
+            successCounter = getRuntimeContext().getMetricGroup().counter("telemetry_deserialized_success");
+            malformedCounter = getRuntimeContext().getMetricGroup().counter("malformed_json_records");
+        }
+
+        @Override
+        public void processElement(String value, Context ctx, Collector<Telemetry> out) throws Exception {
+            try {
+                Telemetry t = mapper.readValue(value, Telemetry.class);
+                if (t != null && t.getAssetId() != null && t.getTimestamp() != null) {
+                    out.collect(t);
+                    if (successCounter != null) {
+                        successCounter.inc();
+                    }
+                } else {
+                    if (malformedCounter != null) {
+                        malformedCounter.inc();
+                    }
+                    ctx.output(DLQ_TAG, value);
+                }
+            } catch (Exception e) {
+                if (malformedCounter != null) {
+                    malformedCounter.inc();
+                }
+                logger.warn("Malformed JSON received in telemetry.raw, routing to DLQ: {}", e.getMessage());
+                ctx.output(DLQ_TAG, value);
+            }
+        }
     }
 
     public static class TelemetryDeserializer extends RichMapFunction<String, Telemetry> {
